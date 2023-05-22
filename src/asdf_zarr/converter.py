@@ -86,7 +86,7 @@ class ZarrConverter(asdf.extension.Converter):
         obj = zarr.open(store=store, chunk_store=chunk_store)
         return obj
 
-    def reserve_blocks(self, obj, tag, ctx):
+    def reserve_blocks(self, obj, tag):
         if not isinstance(obj.chunk_store, storage.InternalStore):
             return []
 
