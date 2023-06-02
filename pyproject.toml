@@ -1,0 +1,48 @@
+[project]
+name = "asdf_zarr"
+description = "Asdf extension to support Zarr arrays"
+readme = 'README.rst'
+license = { file = 'LICENSE' }
+authors = [{ name = 'The ASDF Developers', email = 'help@stsci.edu' }]
+requires-python = '>=3.9'
+classifiers = [
+  'Development Status :: 5 - Production/Stable',
+  "License :: OSI Approved :: BSD License",
+  'Programming Language :: Python',
+  'Programming Language :: Python :: 3',
+  'Programming Language :: Python :: 3.9',
+  'Programming Language :: Python :: 3.10',
+  'Programming Language :: Python :: 3.11',
+]
+version = "0.0.1"
+dependencies = [
+  # until asdf 3.0 is released we need the development version
+  "asdf @ git+https://github.com/asdf-format/asdf@main",
+  "zarr >= 2.14",
+  "fsspec",
+]
+
+[project.optional-dependencies]
+tests = [
+  "pytest>=6",
+]
+
+[project.urls]
+'documentation' = 'https://asdf-zarr.readthedocs.io/en/latest'
+'repository' = 'https://github.com/asdf-format/asdf-zarr'
+'tracker' = 'https://github.com/asdf-format/asdf-zarr/issues'
+
+[build-system]
+build-backend = 'setuptools.build_meta'
+requires = [
+  "setuptools>=60",
+  "wheel",
+]
+
+[project.entry-points]
+'asdf.extensions' = {asdf = 'asdf_zarr.extensions:get_extensions'}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["asdf_zarr*"]
+namespaces = false
