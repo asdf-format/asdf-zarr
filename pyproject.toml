@@ -43,7 +43,6 @@ requires = [
 'asdf.extensions' = {asdf = 'asdf_zarr.extensions:get_extensions'}
 
 [tool.setuptools.packages.find]
-where = ["src"]
 include = ["asdf_zarr*"]
 namespaces = false
 
