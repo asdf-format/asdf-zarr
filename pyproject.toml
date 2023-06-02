@@ -42,9 +42,8 @@ requires = [
 [project.entry-points]
 'asdf.extensions' = {asdf = 'asdf_zarr.extensions:get_extensions'}
 
-[tool.setuptools.packages.find]
-include = ["asdf_zarr*"]
-namespaces = false
+[tool.setuptools]
+packages = ["asdf_zarr"]
 
 [tool.black]
 line-length = 120

@@ -1,6 +1,10 @@
 ASDF serialization support for Zarr
 -----------------------------------
 
+.. image:: https://github.com/asdf-format/asdf-zarr/workflows/CI/badge.svg
+    :target: https://github.com/asdf-format/asdf-zarr/actions
+    :alt: CI Status
+
 This packages includes a plugin for the Python library
 `asdf <https://asdf.readthedocs.io/en/latest/>`__ to add support
 for reading and writing chunked
