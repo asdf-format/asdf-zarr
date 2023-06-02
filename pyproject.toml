@@ -64,7 +64,10 @@ force-exclude = '''
 '''
 
 [tool.pytest.ini_options]
-addopts = '--color=yes'
+markers = [
+    "fake_s3: run tests that expect a faked s3 running at 127.0.0.1:5555",
+]
+addopts = '--color=yes -m "not fake_s3"'
 
 [tool.ruff]
 line-length = 120
