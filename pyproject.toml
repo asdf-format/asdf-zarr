@@ -1,0 +1,75 @@
+[project]
+name = "asdf_zarr"
+description = "Asdf extension to support Zarr arrays"
+readme = 'README.rst'
+license = { file = 'LICENSE' }
+authors = [{ name = 'The ASDF Developers', email = 'help@stsci.edu' }]
+requires-python = '>=3.9'
+classifiers = [
+  'Development Status :: 5 - Production/Stable',
+  "License :: OSI Approved :: BSD License",
+  'Programming Language :: Python',
+  'Programming Language :: Python :: 3',
+  'Programming Language :: Python :: 3.9',
+  'Programming Language :: Python :: 3.10',
+  'Programming Language :: Python :: 3.11',
+]
+version = "0.0.1"
+dependencies = [
+  # until asdf 3.0 is released we need the development version
+  "asdf @ git+https://github.com/asdf-format/asdf@main",
+  "zarr >= 2.14",
+  "fsspec",
+]
+
+[project.optional-dependencies]
+tests = [
+  "pytest>=6",
+]
+
+[project.urls]
+'documentation' = 'https://asdf-zarr.readthedocs.io/en/latest'
+'repository' = 'https://github.com/asdf-format/asdf-zarr'
+'tracker' = 'https://github.com/asdf-format/asdf-zarr/issues'
+
+[build-system]
+build-backend = 'setuptools.build_meta'
+requires = [
+  "setuptools>=60",
+  "wheel",
+]
+
+[project.entry-points]
+'asdf.extensions' = {asdf = 'asdf_zarr.extensions:get_extensions'}
+
+[tool.setuptools.packages.find]
+include = ["asdf_zarr*"]
+namespaces = false
+
+[tool.black]
+line-length = 120
+force-exclude = '''
+^/(
+  (
+      \.eggs
+    | \.git
+    | \.pytest_cache
+    | \.tox
+    | asdf/extern
+    | build
+    | dist
+  )/
+)
+'''
+
+[tool.pytest.ini_options]
+markers = [
+    "fake_s3: run tests that expect a faked s3 running at 127.0.0.1:5555",
+]
+addopts = '--color=yes -m "not fake_s3"'
+
+[tool.ruff]
+line-length = 120
+
+[tool.codespell]
+skip="*.pdf,*.asdf,.tox,.git,docs/_build"

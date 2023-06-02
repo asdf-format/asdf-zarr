@@ -1,0 +1,63 @@
+repos:
+
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v4.4.0
+  hooks:
+    - id: check-added-large-files
+    - id: check-ast
+    - id: check-case-conflict
+    - id: check-yaml
+      args: ["--unsafe"]
+    - id: check-toml
+    - id: check-merge-conflict
+    - id: check-symlinks
+    - id: debug-statements
+    - id: detect-private-key
+    - id: end-of-file-fixer
+      exclude: ".*fits"
+    - id: trailing-whitespace
+      exclude: ".*fits"
+
+- repo: https://github.com/pre-commit/pygrep-hooks
+  rev: v1.10.0
+  hooks:
+    - id: python-check-blanket-noqa
+    - id: python-check-mock-methods
+    - id: rst-directive-colons
+    - id: rst-inline-touching-normal
+    - id: text-unicode-replacement-char
+
+- repo: https://github.com/codespell-project/codespell
+  rev: v2.2.4
+  hooks:
+    - id: codespell
+      args: ["--write-changes"]
+      additional_dependencies:
+        - tomli
+
+- repo: https://github.com/ikamensh/flynt/
+  rev: '0.78'
+  hooks:
+    - id: flynt
+      exclude: "asdf/extern/.*"
+
+- repo: https://github.com/charliermarsh/ruff-pre-commit
+  rev: 'v0.0.267'
+  hooks:
+    - id: ruff
+      args: ["--fix"]
+
+- repo: https://github.com/psf/black
+  rev: 23.3.0
+  hooks:
+    - id: black
+
+- repo: https://github.com/asottile/blacken-docs
+  rev: '1.13.0'
+  hooks:
+    - id: blacken-docs
+
+- repo: https://github.com/abravalheri/validate-pyproject
+  rev: "v0.12.2"
+  hooks:
+    - id: validate-pyproject
