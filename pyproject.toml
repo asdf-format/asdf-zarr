@@ -14,7 +14,9 @@ classifiers = [
   'Programming Language :: Python :: 3.10',
   'Programming Language :: Python :: 3.11',
 ]
-version = "0.0.1"
+dynamic = [
+  'version',
+]
 dependencies = [
   # until asdf 3.0 is released we need the development version
   "asdf @ git+https://github.com/asdf-format/asdf@main",
@@ -36,6 +38,7 @@ tests = [
 build-backend = 'setuptools.build_meta'
 requires = [
   "setuptools>=60",
+  "setuptools_scm[toml]>=3.4",
   "wheel",
 ]
 
@@ -45,6 +48,9 @@ requires = [
 [tool.setuptools.packages.find]
 include = ["asdf_zarr*"]
 namespaces = false
+
+[tool.setuptools_scm]
+write_to = "asdf_zarr/_version.py"
 
 [tool.black]
 line-length = 120

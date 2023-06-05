@@ -56,7 +56,7 @@ pip-wheel-metadata
 .DS_Store
 
 # setuptools-scm generated version file
-asdf/_version.py
+asdf_zarr/_version.py
 
 # Jupyter
 .ipynb_checkpoints
