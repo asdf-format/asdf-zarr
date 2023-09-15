@@ -1,3 +1,8 @@
 git+https://github.com/asdf-format/asdf
 git+https://github.com/zarr-developers/zarr-python/
 git+https://github.com/fsspec/filesystem_spec/
+
+# Use Bi-weekly numpy/scipy dev builds
+--extra-index-url https://pypi.anaconda.org/scientific-python-nightly-wheels/simple
+numpy>=0.0.dev0
+scipy>=0.0.dev0
