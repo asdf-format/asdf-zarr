@@ -14,10 +14,10 @@ for reading and writing chunked
 Installation
 ------------
 
-This extension is available on PyPi. We are actively developing
-this extension and until a stable release (1.0.0) is made it
+This extension is available on PyPI. We are actively developing
+this extension and until a stable release (`1.0.0`) is made it
 is possible that breaking changes will be introduced. If you
-are using this extension please let us know so we can look at
+are using this extension please let us know so we can look into
 adding your project to downstream testing in our CI.
 
 .. code-block:: console
