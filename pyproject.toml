@@ -13,13 +13,13 @@ classifiers = [
   'Programming Language :: Python :: 3.9',
   'Programming Language :: Python :: 3.10',
   'Programming Language :: Python :: 3.11',
+  'Programming Language :: Python :: 3.12',
 ]
 dynamic = [
   'version',
 ]
 dependencies = [
-  # until asdf 3.0 is released we need the development version
-  "asdf @ git+https://github.com/asdf-format/asdf@main",
+  "asdf >= 3.0.0",
   "zarr >= 2.14",
   "fsspec",
 ]
