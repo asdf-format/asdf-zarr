@@ -61,6 +61,7 @@ jobs:
         - linux: py39-devdeps-parallel
         - linux: py310-devdeps-parallel
         - linux: py311-devdeps-parallel
+        - linux: py312-devdeps-parallel
 
   package:
     needs: [core]
