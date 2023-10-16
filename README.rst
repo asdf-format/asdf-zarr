@@ -5,7 +5,7 @@ ASDF serialization support for Zarr
     :target: https://github.com/asdf-format/asdf-zarr/actions
     :alt: CI Status
 
-This packages includes a plugin for the Python library
+This packages includes an extension for the Python library
 `asdf <https://asdf.readthedocs.io/en/latest/>`__ to add support
 for reading and writing chunked
 `Zarr <https://zarr.readthedocs.io/en/stable/>`__ arrays.
@@ -14,23 +14,21 @@ for reading and writing chunked
 Installation
 ------------
 
-This plugin is not yet stable and released on
-PyPi and requires features only available in the
-current development head of ASDF.
+This extension is available on PyPi. We are actively developing
+this extension and until a stable release (1.0.0) is made it
+is possible that breaking changes will be introduced. If you
+are using this extension please let us know so we can look at
+adding your project to downstream testing in our CI.
 
 .. code-block:: console
 
-    $ pip install git+https://github.com/asdf-format/asdf
-    $ pip install git+https://github.com/asdf-format/asdf-zarr
+    $ pip install asdf-zarr
 
-Or alternatively by cloning and installing each package.
+Alternatively this extension can be installed by cloning
+and installing the git repository.
 
 .. code-block:: console
 
-    $ git clone https://github.com/asdf-format/asdf
-    $ cd asdf
-    $ pip install .
-    $ cd ../
     $ git clone https://github.com/asdf-format/asdf-zarr
     $ cd asdf-zarr
     $ pip install .
