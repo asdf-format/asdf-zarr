@@ -160,15 +160,20 @@ class ReadInternalStore(InternalStore):
     def __getstate__(self):
         state = {}
         state["_sep"] = self._sep
+        if hasattr(self, "_chunk_info"):
+            # handle instance that was already pickled and unpickled
+            state["_chunk_info"] = self._chunk_info
+        else:
+            # and instance that was not yet pickled
 
-        # for each callback, get the file uri and block offset
-        def _callback_info(cb):
-            return {
-                "offset": cb(_attr="offset"),
-                "uri": cb(_attr="_fd")().uri,
-            }
+            # for each callback, get the file uri and block offset
+            def _callback_info(cb):
+                return {
+                    "offset": cb(_attr="offset"),
+                    "uri": cb(_attr="_fd")().uri,
+                }
 
-        state["_chunk_callbacks"] = {k: _callback_info(self._chunk_callbacks[k]) for k in self._chunk_callbacks}
+            state["_chunk_info"] = {k: _callback_info(self._chunk_callbacks[k]) for k in self._chunk_callbacks}
         return state
 
     def __setstate__(self, state):
@@ -181,7 +186,8 @@ class ReadInternalStore(InternalStore):
 
             return cb
 
-        self._chunk_callbacks = {k: _to_callback(state["_chunk_callbacks"][k]) for k in state["_chunk_callbacks"]}
+        self._chunk_info = state["_chunk_info"]
+        self._chunk_callbacks = {k: _to_callback(self._chunk_info[k]) for k in self._chunk_info}
         # as __init__ will not be called on self, set up attributed expected
         # due to the parent InternalStore class
         self._tmp_store_ = None
