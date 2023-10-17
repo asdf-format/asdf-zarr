@@ -129,3 +129,19 @@ def test_open_mode(tmp_path, mode):
             af["arr"][0, 0] = 1
         else:
             raise Exception(f"Unknown mode {mode}")
+
+
+@pytest.mark.parametrize("meta_store", [True, False])
+def test_to_internal(meta_store):
+    if meta_store:
+        zarr = create_zarray(store=KVStore({}), chunk_store=TempStore())
+    else:
+        zarr = create_zarray(store=TempStore())
+    internal = asdf_zarr.storage.to_internal(zarr)
+    assert isinstance(internal.chunk_store, asdf_zarr.storage.InternalStore)
+    # the store shouldn't be wrapped if it's not used for chunks
+    if zarr.store is not zarr.chunk_store:
+        assert isinstance(internal.store, KVStore)
+    # calling it a second time shouldn't re-wrap the store
+    same = asdf_zarr.storage.to_internal(internal)
+    assert same.chunk_store is internal.chunk_store

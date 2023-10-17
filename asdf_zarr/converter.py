@@ -83,13 +83,3 @@ class ZarrConverter(asdf.extension.Converter):
         # TODO mode, version, path_str?
         obj = zarr.open(store=store, chunk_store=chunk_store)
         return obj
-
-    def reserve_blocks(self, obj, tag):
-        if not isinstance(obj.chunk_store, storage.InternalStore):
-            return []
-
-        # if this block uses a 'InternalStore' it uses blocks
-        keys = list(obj.chunk_store._chunk_asdf_keys.keys())
-        if obj.chunk_store._chunk_block_map_asdf_key is not None:
-            keys.append(obj._chunk_block_map_asdf_key)
-        return keys
