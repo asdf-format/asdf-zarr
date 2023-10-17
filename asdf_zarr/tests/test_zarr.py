@@ -7,7 +7,7 @@ import asdf_zarr.storage
 import numpy
 import pytest
 import zarr
-from zarr.storage import DirectoryStore, NestedDirectoryStore
+from zarr.storage import DirectoryStore, KVStore, MemoryStore, NestedDirectoryStore, TempStore
 
 
 def create_zarray(shape=None, chunks=None, dtype="f8", store=None):
@@ -27,11 +27,18 @@ def create_zarray(shape=None, chunks=None, dtype="f8", store=None):
 @pytest.mark.parametrize("copy_arrays", [True, False])
 @pytest.mark.parametrize("lazy_load", [True, False])
 @pytest.mark.parametrize("compression", ["input", "zlib"])
-@pytest.mark.parametrize("store_type", [DirectoryStore, NestedDirectoryStore])
+@pytest.mark.parametrize("store_type", [DirectoryStore, KVStore, MemoryStore, NestedDirectoryStore, TempStore])
 @pytest.mark.parametrize("to_internal", [True, False])
 def test_write_to(tmp_path, copy_arrays, lazy_load, compression, store_type, to_internal):
-    store1 = store_type(tmp_path / "zarr_array_1")
-    store2 = store_type(tmp_path / "zarr_array_2")
+    if store_type in (DirectoryStore, NestedDirectoryStore):
+        store1 = store_type(tmp_path / "zarr_array_1")
+        store2 = store_type(tmp_path / "zarr_array_2")
+    elif store_type is KVStore:
+        store1 = store_type({})
+        store2 = store_type({})
+    else:
+        store1 = store_type()
+        store2 = store_type()
 
     arr1 = create_zarray(store=store1)
     arr2 = create_zarray(store=store2)
@@ -48,8 +55,7 @@ def test_write_to(tmp_path, copy_arrays, lazy_load, compression, store_type, to_
     with asdf.open(fn, mode="r", copy_arrays=copy_arrays, lazy_load=lazy_load) as af:
         for n, a in (("arr1", arr1), ("arr2", arr2)):
             assert isinstance(af[n], zarr.core.Array)
-            # for these tests, data should not be converted to a different storage format
-            if to_internal:
+            if to_internal or store_type in (KVStore, MemoryStore, TempStore):
                 assert isinstance(af[n].chunk_store, asdf_zarr.storage.InternalStore)
             else:
                 assert isinstance(af[n].chunk_store, store_type)
