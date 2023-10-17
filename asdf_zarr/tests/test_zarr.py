@@ -2,18 +2,22 @@ from collections import UserDict
 import itertools
 
 import asdf
+import asdf_zarr
+import asdf_zarr.storage
 import numpy
 import pytest
 import zarr
-from zarr.storage import DirectoryStore, NestedDirectoryStore
+from zarr.storage import DirectoryStore, KVStore, MemoryStore, NestedDirectoryStore, TempStore
 
 
-def create_zarray(shape=None, chunks=None, dtype="f8", store=None):
+def create_zarray(shape=None, chunks=None, dtype="f8", store=None, chunk_store=None):
     if shape is None:
         shape = (6, 9)
     if chunks is None:
         chunks = [max(1, d // 3) for d in shape]
-    arr = zarr.creation.create((6, 9), store=store, chunks=chunks, dtype=dtype, compressor=None)
+    arr = zarr.creation.create(
+        (6, 9), store=store, chunk_store=chunk_store, chunks=chunks, dtype=dtype, compressor=None
+    )
     for chunk_index in itertools.product(*[range(c) for c in arr.cdata_shape]):
         inds = []
         for i, c in zip(chunk_index, arr.chunks):
@@ -25,14 +29,37 @@ def create_zarray(shape=None, chunks=None, dtype="f8", store=None):
 @pytest.mark.parametrize("copy_arrays", [True, False])
 @pytest.mark.parametrize("lazy_load", [True, False])
 @pytest.mark.parametrize("compression", ["input", "zlib"])
-@pytest.mark.parametrize("store_type", [DirectoryStore, NestedDirectoryStore])
-def test_write_to(tmp_path, copy_arrays, lazy_load, compression, store_type):
-    store1 = store_type(tmp_path / "zarr_array_1")
-    store2 = store_type(tmp_path / "zarr_array_2")
+@pytest.mark.parametrize("store_type", [DirectoryStore, KVStore, MemoryStore, NestedDirectoryStore, TempStore])
+@pytest.mark.parametrize("to_internal", [True, False])
+@pytest.mark.parametrize("meta_store", [True, False])
+def test_write_to(tmp_path, copy_arrays, lazy_load, compression, store_type, to_internal, meta_store):
+    if store_type in (DirectoryStore, NestedDirectoryStore):
+        store1 = store_type(tmp_path / "zarr_array_1")
+        store2 = store_type(tmp_path / "zarr_array_2")
+    elif store_type is KVStore:
+        store1 = store_type({})
+        store2 = store_type({})
+    else:
+        store1 = store_type()
+        store2 = store_type()
 
-    arr1 = create_zarray(store=store1)
-    arr2 = create_zarray(store=store2)
+    # should meta be in a different store?
+    if meta_store:
+        chunk_store1 = store1
+        store1 = KVStore({})
+        chunk_store2 = store2
+        store2 = KVStore({})
+    else:
+        chunk_store1 = None
+        chunk_store2 = None
+
+    arr1 = create_zarray(store=store1, chunk_store=chunk_store1)
+    arr2 = create_zarray(store=store2, chunk_store=chunk_store2)
+
     arr2[:] = arr2[:] * -2
+    if to_internal:
+        arr1 = asdf_zarr.storage.to_internal(arr1)
+        arr2 = asdf_zarr.storage.to_internal(arr2)
     tree = {"arr1": arr1, "arr2": arr2}
 
     fn = tmp_path / "test.asdf"
@@ -42,8 +69,10 @@ def test_write_to(tmp_path, copy_arrays, lazy_load, compression, store_type):
     with asdf.open(fn, mode="r", copy_arrays=copy_arrays, lazy_load=lazy_load) as af:
         for n, a in (("arr1", arr1), ("arr2", arr2)):
             assert isinstance(af[n], zarr.core.Array)
-            # for these tests, data should not be converted to a different storage format
-            assert isinstance(af[n].chunk_store, store_type)
+            if to_internal or store_type in (KVStore, MemoryStore, TempStore):
+                assert isinstance(af[n].chunk_store, asdf_zarr.storage.InternalStore)
+            else:
+                assert isinstance(af[n].chunk_store, store_type)
             assert numpy.allclose(af[n], a)
 
 

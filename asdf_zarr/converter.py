@@ -32,14 +32,14 @@ class ZarrConverter(asdf.extension.Converter):
             chunk_key_block_index_map = {}
             for chunk_key in storage._iter_chunk_keys(obj, only_initialized=True):
                 data_callback = storage._generate_chunk_data_callback(obj, chunk_key)
-                asdf_key = chunk_store._chunk_asdf_keys.get(chunk_key, asdf.util.BlockKey())
-                block_index = ctx.find_block_index(asdf_key, data_callback)
+                asdf_key = chunk_store._chunk_asdf_keys.get(chunk_key, ctx.generate_block_key())
+                block_index = ctx.find_available_block_index(data_callback, asdf_key)
                 chunk_key_block_index_map[chunk_key] = block_index
             asdf_key = chunk_store._chunk_block_map_asdf_key
             if asdf_key is None:
-                asdf_key = asdf.util.BlockKey()
-            obj_dict["chunk_block_map"] = ctx.find_block_index(
-                asdf_key, storage._generate_chunk_map_callback(obj, chunk_key_block_index_map)
+                asdf_key = ctx.generate_block_key()
+            obj_dict["chunk_block_map"] = ctx.find_available_block_index(
+                storage._generate_chunk_map_callback(obj, chunk_key_block_index_map), asdf_key
             )
             return obj_dict
 
@@ -75,7 +75,7 @@ class ZarrConverter(asdf.extension.Converter):
             return obj
 
         chunk_store = util.decode_storage(node["store"])
-        if "meta" in node:
+        if "meta_store" in node:
             # separate meta and chunk stores
             store = util.decode_storage(node["meta_store"])
         else:
