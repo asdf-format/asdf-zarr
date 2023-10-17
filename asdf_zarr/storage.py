@@ -2,7 +2,6 @@ import itertools
 import json
 import math
 
-import asdf
 import numpy
 import zarr
 
@@ -61,7 +60,7 @@ def to_internal(zarray):
         return zarray
     # make a new internal store based off an existing store
     internal_store = ConvertedInternalStore(zarray.chunk_store or zarray.store)
-    return zarr.open(internal_store)
+    return zarr.open(zarray.store, chunk_store=internal_store)
 
 
 class InternalStore(zarr.storage.Store):

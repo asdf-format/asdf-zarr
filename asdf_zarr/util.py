@@ -2,7 +2,7 @@ import copy
 
 import fsspec
 import zarr.storage
-from zarr.storage import DirectoryStore, FSStore, NestedDirectoryStore, TempStore
+from zarr.storage import DirectoryStore, FSStore, KVStore, NestedDirectoryStore, TempStore
 
 
 def encode_storage(store):
@@ -33,6 +33,8 @@ def encode_storage(store):
         obj_dict["mode"] = store.mode
         # store.fs.to_json to get full filesystem (see fsspec.AbstractFileSystem.from_json)
         obj_dict["fs"] = store.fs.to_json()
+    elif isinstance(store, KVStore):
+        obj_dict["map"] = {k: store[k] for k in store}
     else:
         raise NotImplementedError(f"zarr.storage.Store subclass {store.__class__} not supported")
     return obj_dict
@@ -59,4 +61,6 @@ def decode_storage(obj_dict):  # TODO needs kwargs for dimension sep?
     if "fs" in kwargs and type_string == "FSStore":
         kwargs["fs"] = fsspec.AbstractFileSystem.from_json(kwargs["fs"])
         args.append(kwargs.pop("path"))
+    elif "map" in kwargs and type_string == "KVStore":
+        args.append(kwargs.pop("map"))
     return getattr(zarr.storage, type_string)(*args, **kwargs)

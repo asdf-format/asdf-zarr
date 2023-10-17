@@ -10,12 +10,14 @@ import zarr
 from zarr.storage import DirectoryStore, KVStore, MemoryStore, NestedDirectoryStore, TempStore
 
 
-def create_zarray(shape=None, chunks=None, dtype="f8", store=None):
+def create_zarray(shape=None, chunks=None, dtype="f8", store=None, chunk_store=None):
     if shape is None:
         shape = (6, 9)
     if chunks is None:
         chunks = [max(1, d // 3) for d in shape]
-    arr = zarr.creation.create((6, 9), store=store, chunks=chunks, dtype=dtype, compressor=None)
+    arr = zarr.creation.create(
+        (6, 9), store=store, chunk_store=chunk_store, chunks=chunks, dtype=dtype, compressor=None
+    )
     for chunk_index in itertools.product(*[range(c) for c in arr.cdata_shape]):
         inds = []
         for i, c in zip(chunk_index, arr.chunks):
@@ -29,7 +31,8 @@ def create_zarray(shape=None, chunks=None, dtype="f8", store=None):
 @pytest.mark.parametrize("compression", ["input", "zlib"])
 @pytest.mark.parametrize("store_type", [DirectoryStore, KVStore, MemoryStore, NestedDirectoryStore, TempStore])
 @pytest.mark.parametrize("to_internal", [True, False])
-def test_write_to(tmp_path, copy_arrays, lazy_load, compression, store_type, to_internal):
+@pytest.mark.parametrize("meta_store", [True, False])
+def test_write_to(tmp_path, copy_arrays, lazy_load, compression, store_type, to_internal, meta_store):
     if store_type in (DirectoryStore, NestedDirectoryStore):
         store1 = store_type(tmp_path / "zarr_array_1")
         store2 = store_type(tmp_path / "zarr_array_2")
@@ -40,8 +43,19 @@ def test_write_to(tmp_path, copy_arrays, lazy_load, compression, store_type, to_
         store1 = store_type()
         store2 = store_type()
 
-    arr1 = create_zarray(store=store1)
-    arr2 = create_zarray(store=store2)
+    # should meta be in a different store?
+    if meta_store:
+        chunk_store1 = store1
+        store1 = KVStore({})
+        chunk_store2 = store2
+        store2 = KVStore({})
+    else:
+        chunk_store1 = None
+        chunk_store2 = None
+
+    arr1 = create_zarray(store=store1, chunk_store=chunk_store1)
+    arr2 = create_zarray(store=store2, chunk_store=chunk_store2)
+
     arr2[:] = arr2[:] * -2
     if to_internal:
         arr1 = asdf_zarr.storage.to_internal(arr1)
