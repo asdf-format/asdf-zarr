@@ -139,11 +139,10 @@ class ReadInternalStore(InternalStore):
         # split into 4 chunks) the chunk_block_map will be
         # 4 x 5
         cdata_shape = tuple(math.ceil(s / c) for s, c in zip(zarray_meta["shape"], zarray_meta["chunks"]))
+        self._chunk_block_map_asdf_key = ctx.generate_block_key()
         self._chunk_block_map = numpy.frombuffer(
-            ctx.get_block_data_callback(chunk_block_map_index)(), dtype="int32"
+            ctx.get_block_data_callback(chunk_block_map_index, self._chunk_block_map_asdf_key)(), dtype="int32"
         ).reshape(cdata_shape)
-        self._chunk_block_map_asdf_key = asdf.util.BlockKey()
-        ctx.assign_block_key(chunk_block_map_index, self._chunk_block_map_asdf_key)
 
         self._chunk_block_map_asdf_key = None
 
@@ -154,10 +153,9 @@ class ReadInternalStore(InternalStore):
             coord = tuple(coord)
             block_index = int(self._chunk_block_map[coord])
             chunk_key = self._sep.join((str(c) for c in tuple(coord)))
-            asdf_key = asdf.util.BlockKey()
+            asdf_key = ctx.generate_block_key()
             self._chunk_asdf_keys[chunk_key] = asdf_key
-            ctx.assign_block_key(block_index, asdf_key)
-            self._chunk_callbacks[chunk_key] = ctx.get_block_data_callback(block_index)
+            self._chunk_callbacks[chunk_key] = ctx.get_block_data_callback(block_index, asdf_key)
 
     def _sep_key(self, key):
         if self._sep is None:

@@ -2,6 +2,8 @@ from collections import UserDict
 import itertools
 
 import asdf
+import asdf_zarr
+import asdf_zarr.storage
 import numpy
 import pytest
 import zarr
@@ -26,13 +28,17 @@ def create_zarray(shape=None, chunks=None, dtype="f8", store=None):
 @pytest.mark.parametrize("lazy_load", [True, False])
 @pytest.mark.parametrize("compression", ["input", "zlib"])
 @pytest.mark.parametrize("store_type", [DirectoryStore, NestedDirectoryStore])
-def test_write_to(tmp_path, copy_arrays, lazy_load, compression, store_type):
+@pytest.mark.parametrize("to_internal", [True, False])
+def test_write_to(tmp_path, copy_arrays, lazy_load, compression, store_type, to_internal):
     store1 = store_type(tmp_path / "zarr_array_1")
     store2 = store_type(tmp_path / "zarr_array_2")
 
     arr1 = create_zarray(store=store1)
     arr2 = create_zarray(store=store2)
     arr2[:] = arr2[:] * -2
+    if to_internal:
+        arr1 = asdf_zarr.storage.to_internal(arr1)
+        arr2 = asdf_zarr.storage.to_internal(arr2)
     tree = {"arr1": arr1, "arr2": arr2}
 
     fn = tmp_path / "test.asdf"
@@ -43,7 +49,10 @@ def test_write_to(tmp_path, copy_arrays, lazy_load, compression, store_type):
         for n, a in (("arr1", arr1), ("arr2", arr2)):
             assert isinstance(af[n], zarr.core.Array)
             # for these tests, data should not be converted to a different storage format
-            assert isinstance(af[n].chunk_store, store_type)
+            if to_internal:
+                assert isinstance(af[n].chunk_store, asdf_zarr.storage.InternalStore)
+            else:
+                assert isinstance(af[n].chunk_store, store_type)
             assert numpy.allclose(af[n], a)
 
 
