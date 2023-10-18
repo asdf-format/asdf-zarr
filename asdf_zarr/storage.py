@@ -2,6 +2,7 @@ import itertools
 import json
 import math
 
+import asdf
 import numpy
 import zarr
 
@@ -155,6 +156,42 @@ class ReadInternalStore(InternalStore):
             asdf_key = ctx.generate_block_key()
             self._chunk_asdf_keys[chunk_key] = asdf_key
             self._chunk_callbacks[chunk_key] = ctx.get_block_data_callback(block_index, asdf_key)
+
+    def __getstate__(self):
+        state = {}
+        state["_sep"] = self._sep
+        if hasattr(self, "_chunk_info"):
+            # handle instance that was already pickled and unpickled
+            state["_chunk_info"] = self._chunk_info
+        else:
+            # and instance that was not yet pickled
+
+            # for each callback, get the file uri and block offset
+            def _callback_info(cb):
+                return {
+                    "offset": cb(_attr="offset"),
+                    "uri": cb(_attr="_fd")().uri,
+                }
+
+            state["_chunk_info"] = {k: _callback_info(self._chunk_callbacks[k]) for k in self._chunk_callbacks}
+        return state
+
+    def __setstate__(self, state):
+        self._sep = state["_sep"]
+
+        def _to_callback(info):
+            def cb():
+                with asdf.generic_io.get_file(info["uri"], mode="r") as gf:
+                    return asdf._block.io.read_block(gf, info["offset"])[-1]
+
+            return cb
+
+        self._chunk_info = state["_chunk_info"]
+        self._chunk_callbacks = {k: _to_callback(self._chunk_info[k]) for k in self._chunk_info}
+        # as __init__ will not be called on self, set up attributed expected
+        # due to the parent InternalStore class
+        self._tmp_store_ = None
+        self._deleted_keys = set()
 
     def _sep_key(self, key):
         if self._sep is None:
