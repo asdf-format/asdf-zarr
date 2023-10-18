@@ -4,6 +4,9 @@ ASDF serialization support for Zarr
 .. image:: https://github.com/asdf-format/asdf-zarr/workflows/CI/badge.svg
     :target: https://github.com/asdf-format/asdf-zarr/actions
     :alt: CI Status
+.. image:: https://codecov.io/gh/asdf-format/asdf-zarr/branch/main/graphs/badge.svg
+    :target: https://codecov.io/gh/asdf-format/asdf-zarr
+    :alt: Codecov
 
 This packages includes an extension for the Python library
 `asdf <https://asdf.readthedocs.io/en/latest/>`__ to add support
