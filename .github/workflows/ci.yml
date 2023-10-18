@@ -36,8 +36,9 @@ jobs:
         - linux: coverage
           name: Python 3.9 coverage
           python-version: 3.9
-      # TODO uncomment after adding to codecov
-      # coverage: codecov
+      coverage: 'codecov'
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   test:
     needs: [core]
