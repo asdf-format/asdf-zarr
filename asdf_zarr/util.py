@@ -1,8 +1,9 @@
 import copy
 
 import fsspec
-import zarr.storage
-from zarr.storage import DirectoryStore, FSStore, KVStore, NestedDirectoryStore, TempStore
+
+from ._zarr_compat import zarr
+from ._zarr_compat import storage
 
 
 def encode_storage(store):
@@ -20,12 +21,12 @@ def encode_storage(store):
     obj_dict : dictionary encoding
     """
     obj_dict = {"type_string": store.__class__.__name__}
-    if isinstance(store, (DirectoryStore, NestedDirectoryStore)) and not isinstance(store, TempStore):
+    if isinstance(store, (storage.DirectoryStore, storage.NestedDirectoryStore)) and not isinstance(store, storage.TempStore):
         # dimension separator is _dimension separator and should be
         # read from the zarray itself, not the store
         obj_dict["normalize_keys"] = store.normalize_keys
         obj_dict["path"] = store.path
-    elif isinstance(store, FSStore):
+    elif isinstance(store, storage.FSStore):
         obj_dict["normalize_keys"] = store.normalize_keys
         # store.path path within the filesystem
         obj_dict["path"] = store.path
@@ -33,7 +34,7 @@ def encode_storage(store):
         obj_dict["mode"] = store.mode
         # store.fs.to_json to get full filesystem (see fsspec.AbstractFileSystem.from_json)
         obj_dict["fs"] = store.fs.to_json()
-    elif isinstance(store, KVStore):
+    elif isinstance(store, storage.KVStore):
         obj_dict["map"] = {k: store[k] for k in store}
     else:
         raise NotImplementedError(f"zarr.storage.Store subclass {store.__class__} not supported")
@@ -56,11 +57,11 @@ def decode_storage(obj_dict):  # TODO needs kwargs for dimension sep?
     kwargs = copy.deepcopy(obj_dict)
     args = []
     type_string = kwargs.pop("type_string")
-    if not hasattr(zarr.storage, type_string):
+    if not hasattr(storage, type_string):
         raise NotImplementedError(f"zarr.storage.Store subclass {type_string} not supported")
     if "fs" in kwargs and type_string == "FSStore":
         kwargs["fs"] = fsspec.AbstractFileSystem.from_json(kwargs["fs"])
         args.append(kwargs.pop("path"))
     elif "map" in kwargs and type_string == "KVStore":
         args.append(kwargs.pop("map"))
-    return getattr(zarr.storage, type_string)(*args, **kwargs)
+    return getattr(storage, type_string)(*args, **kwargs)

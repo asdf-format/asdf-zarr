@@ -2,8 +2,7 @@ import json
 
 import asdf
 
-import zarr
-
+from ._zarr_compat import zarr
 from . import util
 from . import storage
 
@@ -52,11 +51,6 @@ class ZarrConverter(asdf.extension.Converter):
         return obj_dict
 
     def from_yaml_tree(self, node, tag, ctx):
-        import zarr
-
-        from . import util
-        from . import storage
-
         if ".zarray" in node and "chunk_block_map" in node:
             # this is an internally stored zarr array
             # TODO should we enforce no zarr compression here?
