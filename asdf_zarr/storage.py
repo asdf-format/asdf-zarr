@@ -4,7 +4,8 @@ import math
 
 import asdf
 import numpy
-import zarr
+
+from ._zarr_compat import zarr
 
 
 MISSING_CHUNK = -1
