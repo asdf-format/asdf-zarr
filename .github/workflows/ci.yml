@@ -28,6 +28,9 @@ jobs:
       default_python: '3.10'
       envs: |
         - linux: coverage
+          name: Python 3.12 coverage
+          python-version: 3.12
+        - linux: coverage
           name: Python 3.11 coverage
           python-version: 3.11
         - linux: coverage
@@ -46,10 +49,10 @@ jobs:
     with:
       submodules: false
       # Any env name which does not start with `pyXY` will use this Python version.
-      default_python: '3.9'
+      default_python: '3.11'
       envs: |
-        - macos: py39-parallel
-        - windows: py39-parallel
+        - macos: py311-parallel
+        - windows: py311-parallel
 
   dev:
     needs: [core]
@@ -59,7 +62,6 @@ jobs:
       # Any env name which does not start with `pyXY` will use this Python version.
       default_python: '3.9'
       envs: |
-        - linux: py39-devdeps-parallel
         - linux: py310-devdeps-parallel
         - linux: py311-devdeps-parallel
         - linux: py312-devdeps-parallel
