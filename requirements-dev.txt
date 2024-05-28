@@ -1,5 +1,5 @@
 git+https://github.com/asdf-format/asdf
-git+https://github.com/zarr-developers/zarr-python/
+#git+https://github.com/zarr-developers/zarr-python/
 git+https://github.com/fsspec/filesystem_spec/
 
 # Use Bi-weekly numpy/scipy dev builds
