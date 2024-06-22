@@ -11,7 +11,7 @@ from . import storage
 
 
 class ZarrConverter(asdf.extension.Converter):
-    tags = ["asdf://stsci.edu/example-project/tags/zarr-*"]
+    tags = ["asdf://asdf-format.org/zarr/tags/zarr-*"]
     types = ["zarr.core.Array"]
 
     def to_yaml_tree(self, obj, tag, ctx):
