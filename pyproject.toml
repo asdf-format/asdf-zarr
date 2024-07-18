@@ -19,7 +19,7 @@ dynamic = [
   'version',
 ]
 dependencies = [
-  "asdf >= 3.0.0",
+  "asdf >= 3.1.0",
   "zarr >= 2.14, < 3.0.0",
   "fsspec",
 ]
