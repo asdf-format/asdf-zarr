@@ -1,7 +1,7 @@
 0.1.0 (unreleased)
 ------------------
 
--
+- replace usages of ``copy_arrays`` with ``memmap`` [#46]
 
 0.0.4 (2024-06-28)
 ------------------
