@@ -26,13 +26,13 @@ def create_zarray(shape=None, chunks=None, dtype="f8", store=None, chunk_store=N
     return arr
 
 
-@pytest.mark.parametrize("copy_arrays", [True, False])
+@pytest.mark.parametrize("memmap", [True, False])
 @pytest.mark.parametrize("lazy_load", [True, False])
 @pytest.mark.parametrize("compression", ["input", "zlib"])
 @pytest.mark.parametrize("store_type", [DirectoryStore, KVStore, MemoryStore, NestedDirectoryStore, TempStore])
 @pytest.mark.parametrize("to_internal", [True, False])
 @pytest.mark.parametrize("meta_store", [True, False])
-def test_write_to(tmp_path, copy_arrays, lazy_load, compression, store_type, to_internal, meta_store):
+def test_write_to(tmp_path, memmap, lazy_load, compression, store_type, to_internal, meta_store):
     if store_type in (DirectoryStore, NestedDirectoryStore):
         store1 = store_type(tmp_path / "zarr_array_1")
         store2 = store_type(tmp_path / "zarr_array_2")
@@ -66,7 +66,7 @@ def test_write_to(tmp_path, copy_arrays, lazy_load, compression, store_type, to_
     af = asdf.AsdfFile(tree)
     af.write_to(fn, all_array_compression=compression)
 
-    with asdf.open(fn, mode="r", copy_arrays=copy_arrays, lazy_load=lazy_load) as af:
+    with asdf.open(fn, mode="r", memmap=memmap, lazy_load=lazy_load) as af:
         for n, a in (("arr1", arr1), ("arr2", arr2)):
             assert isinstance(af[n], zarr.core.Array)
             if to_internal or store_type in (KVStore, MemoryStore, TempStore):
@@ -76,10 +76,10 @@ def test_write_to(tmp_path, copy_arrays, lazy_load, compression, store_type, to_
             assert numpy.allclose(af[n], a)
 
 
-@pytest.mark.parametrize("copy_arrays", [True, False])
+@pytest.mark.parametrize("memmap", [True, False])
 @pytest.mark.parametrize("lazy_load", [True, False])
 @pytest.mark.parametrize("with_update", [True, False])
-def test_modify(tmp_path, with_update, copy_arrays, lazy_load):
+def test_modify(tmp_path, with_update, memmap, lazy_load):
     # make a file
     store = DirectoryStore(tmp_path / "zarr_array")
     arr = create_zarray(store=store)
@@ -89,7 +89,7 @@ def test_modify(tmp_path, with_update, copy_arrays, lazy_load):
     af.write_to(fn)
 
     # open the file, modify the array
-    with asdf.open(fn, mode="rw", copy_arrays=copy_arrays, lazy_load=lazy_load) as af:
+    with asdf.open(fn, mode="rw", memmap=memmap, lazy_load=lazy_load) as af:
         assert af["arr"][0, 0] != 42
         af["arr"][0, 0] = 42
         # now modify
@@ -100,7 +100,7 @@ def test_modify(tmp_path, with_update, copy_arrays, lazy_load):
             af.update()
 
     # reopen the file, check for the modification
-    with asdf.open(fn, mode="rw", copy_arrays=copy_arrays, lazy_load=lazy_load) as af:
+    with asdf.open(fn, mode="rw", memmap=memmap, lazy_load=lazy_load) as af:
         assert af["arr"][0, 0] == 42
 
 
