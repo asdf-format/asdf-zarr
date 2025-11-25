@@ -2,6 +2,7 @@
 ------------------
 
 - replace usages of ``copy_arrays`` with ``memmap`` [#46]
+- drop support for Python 3.9 [#57]
 
 0.0.4 (2024-06-28)
 ------------------
