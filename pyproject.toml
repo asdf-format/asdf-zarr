@@ -4,7 +4,7 @@ description = "Asdf extension to support Zarr arrays"
 readme = 'README.rst'
 license-files = ['LICENSE']
 authors = [{ name = 'The ASDF Developers' }]
-requires-python = '>=3.9'
+requires-python = '>=3.10'
 classifiers = [
   'Development Status :: 5 - Production/Stable',
   'Programming Language :: Python',
