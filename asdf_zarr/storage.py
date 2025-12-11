@@ -1,3 +1,4 @@
+import asyncio
 import itertools
 import json
 import math
@@ -11,16 +12,24 @@ import zarr
 MISSING_CHUNK = -1
 
 
+async def _async_iter_to_list(async_iter):
+    return [gen async for gen in async_iter]
+
+
+def async_iter_to_list(async_iter):
+    return asyncio.run(_async_iter_to_list(async_iter))
+
+
 def _iter_chunk_keys(zarray, only_initialized=False):
     """Using zarray metadata iterate over chunk keys"""
     if only_initialized:
-        for k in zarr.storage.listdir(zarray.store):
-            if k == ".zarray":
+        for k in async_iter_to_list(zarray.store.list()):
+            if k in (".zarray", ".zattrs"):
                 continue
             yield k
         return
     # load meta
-    zarray_meta = json.loads(zarray.store[".zarray"])
+    zarray_meta = zarray.metadata.to_dict()
     dimension_separator = zarray_meta.get("dimension_separator", ".")
 
     # make blocks and map them to the internal kv store
@@ -36,7 +45,7 @@ def _iter_chunk_keys(zarray, only_initialized=False):
 
 def _generate_chunk_data_callback(zarray, chunk_key):
     def chunk_data_callback(zarray=zarray, chunk_key=chunk_key):
-        return numpy.frombuffer(zarray.store.get(chunk_key), dtype="uint8")
+        return numpy.frombuffer(asyncio.run(zarray.store.get(chunk_key)).to_bytes(), dtype="uint8")
 
     return chunk_data_callback
 
@@ -46,7 +55,7 @@ def _generate_chunk_map_callback(zarray, chunk_key_block_index_map):
     def chunk_map_callback(zarray=zarray, chunk_key_block_index_map=chunk_key_block_index_map):
         chunk_map = numpy.zeros(zarray.cdata_shape, dtype="int32")
         chunk_map[:] = MISSING_CHUNK  # set all as uninitialized
-        zarray_meta = json.loads(zarray.store[".zarray"])
+        zarray_meta = zarray.metadata.to_dict()
         dimension_separator = zarray_meta.get("dimension_separator", ".")
         for k in _iter_chunk_keys(zarray, only_initialized=True):
             index = chunk_key_block_index_map[k]

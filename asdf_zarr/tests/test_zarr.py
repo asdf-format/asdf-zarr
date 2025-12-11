@@ -7,8 +7,8 @@ import asdf_zarr.storage
 import numpy
 import pytest
 
-from asdf_zarr._zarr_compat import storage
-from asdf_zarr._zarr_compat import zarr
+import zarr
+from zarr import storage
 
 
 def create_zarray(shape=None, chunks=None, dtype="f8", store=None, chunk_store=None):
@@ -16,6 +16,7 @@ def create_zarray(shape=None, chunks=None, dtype="f8", store=None, chunk_store=N
         shape = (6, 9)
     if chunks is None:
         chunks = [max(1, d // 3) for d in shape]
+    # TODO use format 2?
     arr = zarr.create(
         (6, 9), store=store, chunk_store=chunk_store, chunks=chunks, dtype=dtype, compressor=None, zarr_format=2,
     )
@@ -71,11 +72,11 @@ def test_write_to(tmp_path, memmap, lazy_load, compression, store_type, to_inter
 
     with asdf.open(fn, mode="r", memmap=memmap, lazy_load=lazy_load) as af:
         for n, a in (("arr1", arr1), ("arr2", arr2)):
-            assert isinstance(af[n], zarr.core.Array)
+            assert isinstance(af[n], zarr.core.array.Array)
             if to_internal or store_type in (storage.MemoryStore, storage.TempStore):
-                assert isinstance(af[n].chunk_store, asdf_zarr.storage.InternalStore)
+                assert isinstance(af[n].store, asdf_zarr.storage.InternalStore)
             else:
-                assert isinstance(af[n].chunk_store, store_type)
+                assert isinstance(af[n].store, store_type)
             assert numpy.allclose(af[n], a)
 
 
@@ -141,10 +142,10 @@ def test_to_internal(meta_store):
     else:
         zarr = create_zarray(store=storage.TempStore())
     internal = asdf_zarr.storage.to_internal(zarr)
-    assert isinstance(internal.chunk_store, asdf_zarr.storage.InternalStore)
+    assert isinstance(internal.store, asdf_zarr.storage.InternalStore)
     # the store shouldn't be wrapped if it's not used for chunks
-    if zarr.store is not zarr.chunk_store:
+    if zarr.store is not zarr.store:
         assert isinstance(internal.store, storage.MemoryStore)
     # calling it a second time shouldn't re-wrap the store
     same = asdf_zarr.storage.to_internal(internal)
-    assert same.chunk_store is internal.chunk_store
+    assert same.store is internal.store

@@ -1,12 +1,12 @@
+import asyncio
 import json
 
 import asdf
 import zarr
+import zarr.buffer
 
 from . import util
 from . import storage
-
-# TODO convert imports to local to avoid imports on extension loading
 
 
 class ZarrConverter(asdf.extension.Converter):
@@ -21,7 +21,7 @@ class ZarrConverter(asdf.extension.Converter):
         if isinstance(chunk_store, storage.InternalStore):
             # TODO should we enforce no zarr compression here?
             # include data from this zarr array in the asdf file
-            meta = json.loads(obj.store[".zarray"])
+            meta = obj.metadata.to_dict()
             obj_dict = {}
 
             # include the meta data in the tree
@@ -56,16 +56,19 @@ class ZarrConverter(asdf.extension.Converter):
             # TODO should we enforce no zarr compression here?
 
             # load the meta data into memory
-            store = zarr.storage.MemoryStore({".zarray": json.dumps(node[".zarray"])})
+            #store = zarr.storage.MemoryStore({".zarray": json.dumps(node[".zarray"])})
 
             # setup an InternalStore to read block data (when requested)
             zarray_meta = node[".zarray"]
             chunk_block_map_index = node["chunk_block_map"]
 
             chunk_store = storage.ReadInternalStore(ctx, chunk_block_map_index, zarray_meta)
+            buffer = json.dumps(node[".zarray"]).encode("ascii")
+            zarr_buffer = zarr.buffer.cpu.Buffer.from_bytes(buffer)
+            asyncio.run(chunk_store.set(".zarray", zarr_buffer))
 
             # TODO read/write mode here
-            obj = zarr.open_array(store=store, chunk_store=chunk_store)
+            obj = zarr.open_array(store=chunk_store)
             return obj
 
         chunk_store = util.decode_storage(node["store"])
