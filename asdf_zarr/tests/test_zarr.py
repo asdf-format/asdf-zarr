@@ -73,7 +73,7 @@ def test_write_to(tmp_path, memmap, lazy_load, compression, store_type, to_inter
     with asdf.open(fn, mode="r", memmap=memmap, lazy_load=lazy_load) as af:
         for n, a in (("arr1", arr1), ("arr2", arr2)):
             assert isinstance(af[n], zarr.core.array.Array)
-            if to_internal or store_type in (storage.MemoryStore, storage.TempStore):
+            if to_internal or store_type is storage.MemoryStore:
                 assert isinstance(af[n].store, asdf_zarr.storage.InternalStore)
             else:
                 assert isinstance(af[n].store, store_type)
@@ -135,12 +135,8 @@ def test_open_mode(tmp_path, mode):
             raise Exception(f"Unknown mode {mode}")
 
 
-@pytest.mark.parametrize("meta_store", [True, False])
-def test_to_internal(meta_store):
-    if meta_store:
-        zarr = create_zarray(store=storage.MemoryStore({}), chunk_store=storage.TempStore())
-    else:
-        zarr = create_zarray(store=storage.TempStore())
+def test_to_internal(tmp_path):
+    zarr = create_zarray(store=storage.LocalStore(tmp_path))
     internal = asdf_zarr.storage.to_internal(zarr)
     assert isinstance(internal.store, asdf_zarr.storage.InternalStore)
     # the store shouldn't be wrapped if it's not used for chunks

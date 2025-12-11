@@ -22,6 +22,7 @@ class TestInternalStore(StoreTests):
 
     @pytest.fixture()
     def store_kwargs(self) -> dict[str, Any]:
+        # TODO parametrize to use an existing store
         return {}
 
     def test_store_repr(self, store: InternalStore) -> None:

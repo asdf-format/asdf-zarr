@@ -25,10 +25,10 @@ def encode_storage(store):
     if isinstance(store, (storage.LocalStore)):
         # dimension separator is _dimension separator and should be
         # read from the zarray itself, not the store
-        obj_dict["normalize_keys"] = store.normalize_keys
-        obj_dict["path"] = store.path
+        #obj_dict["normalize_keys"] = store.normalize_keys
+        obj_dict["path"] = str(store.root)
     elif isinstance(store, storage.FSStore):
-        obj_dict["normalize_keys"] = store.normalize_keys
+        #obj_dict["normalize_keys"] = store.normalize_keys
         # store.path path within the filesystem
         obj_dict["path"] = store.path
         # store.mode access mode
@@ -56,6 +56,9 @@ def decode_storage(obj_dict):  # TODO needs kwargs for dimension sep?
     store : zarr.storage.Store
     """
     kwargs = copy.deepcopy(obj_dict)
+    # TODO map old to new
+    if "path" in kwargs:
+        kwargs["root"] = kwargs.pop("path")
     args = []
     type_string = kwargs.pop("type_string")
     if not hasattr(storage, type_string):

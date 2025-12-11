@@ -17,7 +17,7 @@ class ZarrConverter(asdf.extension.Converter):
         chunk_store = obj.store
         # these storage types require conversion to an internal store so make it the default
         if isinstance(chunk_store, zarr.storage.MemoryStore):
-            chunk_store = storage.ConvertedInternalStore(chunk_store)
+            chunk_store = storage.InternalStore(chunk_store)
         if isinstance(chunk_store, storage.InternalStore):
             # TODO should we enforce no zarr compression here?
             # include data from this zarr array in the asdf file
@@ -31,10 +31,10 @@ class ZarrConverter(asdf.extension.Converter):
             chunk_key_block_index_map = {}
             for chunk_key in storage._iter_chunk_keys(obj, only_initialized=True):
                 data_callback = storage._generate_chunk_data_callback(obj, chunk_key)
-                asdf_key = chunk_store._chunk_asdf_keys.get(chunk_key, ctx.generate_block_key())
+                asdf_key = getattr(chunk_store, "_chunk_asdf_keys", {}).get(chunk_key, ctx.generate_block_key())
                 block_index = ctx.find_available_block_index(data_callback, asdf_key)
                 chunk_key_block_index_map[chunk_key] = block_index
-            asdf_key = chunk_store._chunk_block_map_asdf_key
+            asdf_key = getattr(chunk_store, "_chunk_block_map_asdf_key", None)
             if asdf_key is None:
                 asdf_key = ctx.generate_block_key()
             obj_dict["chunk_block_map"] = ctx.find_available_block_index(
@@ -43,40 +43,28 @@ class ZarrConverter(asdf.extension.Converter):
             return obj_dict
 
         obj_dict = {}
-        if obj.store is not chunk_store:
-            # encode meta store
-            obj_dict["meta_store"] = util.encode_storage(obj.store)
         obj_dict["store"] = util.encode_storage(chunk_store)
-        # TODO mode, version, path_str?
         return obj_dict
 
     def from_yaml_tree(self, node, tag, ctx):
         if ".zarray" in node and "chunk_block_map" in node:
             # this is an internally stored zarr array
-            # TODO should we enforce no zarr compression here?
-
-            # load the meta data into memory
-            #store = zarr.storage.MemoryStore({".zarray": json.dumps(node[".zarray"])})
-
             # setup an InternalStore to read block data (when requested)
             zarray_meta = node[".zarray"]
             chunk_block_map_index = node["chunk_block_map"]
 
-            chunk_store = storage.ReadInternalStore(ctx, chunk_block_map_index, zarray_meta)
+            chunk_store = storage.ASDFBlockStore(ctx, chunk_block_map_index, zarray_meta)
+            store = storage.InternalStore(chunk_store)
+
             buffer = json.dumps(node[".zarray"]).encode("ascii")
             zarr_buffer = zarr.buffer.cpu.Buffer.from_bytes(buffer)
-            asyncio.run(chunk_store.set(".zarray", zarr_buffer))
+            asyncio.run(store.set(".zarray", zarr_buffer))
 
             # TODO read/write mode here
-            obj = zarr.open_array(store=chunk_store)
+            obj = zarr.open_array(store=store)
             return obj
 
-        chunk_store = util.decode_storage(node["store"])
-        if "meta_store" in node:
-            # separate meta and chunk stores
-            store = util.decode_storage(node["meta_store"])
-        else:
-            store = chunk_store
-        # TODO mode, version, path_str?
-        obj = zarr.open(store=store, chunk_store=chunk_store)
+        store = util.decode_storage(node["store"])
+        # TODO support more than format 2
+        obj = zarr.open_array(store=store, zarr_format=2)
         return obj
