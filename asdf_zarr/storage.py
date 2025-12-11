@@ -1,11 +1,11 @@
 import itertools
 import json
 import math
+import tempfile
 
 import asdf
 import numpy
-
-from ._zarr_compat import zarr
+import zarr
 
 
 MISSING_CHUNK = -1
@@ -14,7 +14,7 @@ MISSING_CHUNK = -1
 def _iter_chunk_keys(zarray, only_initialized=False):
     """Using zarray metadata iterate over chunk keys"""
     if only_initialized:
-        for k in zarr.storage.listdir(zarray.chunk_store):
+        for k in zarr.storage.listdir(zarray.store):
             if k == ".zarray":
                 continue
             yield k
@@ -36,7 +36,7 @@ def _iter_chunk_keys(zarray, only_initialized=False):
 
 def _generate_chunk_data_callback(zarray, chunk_key):
     def chunk_data_callback(zarray=zarray, chunk_key=chunk_key):
-        return numpy.frombuffer(zarray.chunk_store.get(chunk_key), dtype="uint8")
+        return numpy.frombuffer(zarray.store.get(chunk_key), dtype="uint8")
 
     return chunk_data_callback
 
@@ -58,52 +58,90 @@ def _generate_chunk_map_callback(zarray, chunk_key_block_index_map):
 
 
 def to_internal(zarray):
-    if isinstance(zarray.chunk_store, InternalStore):
+    if isinstance(zarray.store, InternalStore):
         return zarray
     # make a new internal store based off an existing store
-    internal_store = ConvertedInternalStore(zarray.chunk_store or zarray.store)
+    internal_store = ConvertedInternalStore(zarray.store)
     return zarr.open(zarray.store, chunk_store=internal_store)
 
 
-class InternalStore(zarr.storage.Store):
-    def __init__(self):
+#'__eq__', 'get_partial_values', 'list', 'list_dir', 'list_prefix'
+class InternalStore(zarr.abc.store.Store):
+    supports_deletes = True
+    supports_listing = True
+    supports_partial_writes = False
+    supports_writes = True
+
+    def __init__(self, read_only=False):
         super().__init__()
+        # TODO support read_only? a requirement of zarr?
+        self._read_only = read_only
         self._tmp_store_ = None
         self._deleted_keys = set()
 
     @property
+    def read_only(self):
+        return self._read_only
+
+    def __eq__(self, other):
+        # TODO make this robust
+        return id(self) == id(other)
+
+    @property
     def _tmp_store(self):
         if self._tmp_store_ is None:
-            # TODO options to control where TempStore is stored
-            self._tmp_store_ = zarr.storage.TempStore()
+            self._tmp_dir = tempfile.TemporaryDirectory()
+            self._tmp_store_ = zarr.storage.LocalStore(self._tmp_dir.name, read_only=self.read_only)
         return self._tmp_store_
 
-    def __setitem__(self, key, value):
+    async def set(self, key, value):
+        if self.read_only:
+            raise ValueError("store was opened in read-only mode and does not support writing")
         if key in self._deleted_keys:
             self._deleted_keys.remove(key)
-        self._tmp_store[key] = value
+        return await self._tmp_store.set(key, value)
 
-    def __delitem__(self, key):
+    async def get(self, key, prototype=None, byte_range=None):
+        if key in self._deleted_keys or self._tmp_store_ is None:
+            raise FileNotFoundError(f"{key}")
+        return await self._tmp_store.get(key, prototype, byte_range)
+
+    async def delete(self, key):
+        if self.read_only:
+            raise ValueError("store was opened in read-only mode and does not support writing")
         self._deleted_keys.add(key)
 
-    def __len__(self):
-        return len(set(self.__iter__()))
+    async def exists(self, key):
+        if key in self._deleted_keys:
+            return False
+        return await self._tmp_store.exists(key)
 
-    def listdir(self, path):
-        if path:
-            raise NotImplementedError("path argument not supported by InternalStore.listdir")
-        return list(self.__iter__())
+    async def get_partial_values(self, prototype=None, key_ranges=None):
+        # TODO handle deleted keys
+        return await self._tmp_store.get_partial_values(prototype, key_ranges)
 
-    def __getitem__(self, key):
-        if key in self._deleted_keys or self._tmp_store_ is None:
-            raise KeyError(f"{key}")
-        return self._tmp_store.__getitem__(key)
+    async def list(self):
+        async for key in self._tmp_store.list():
+            if key not in self._deleted_keys:
+                yield key
 
-    def __iter__(self):
-        keys = set()
-        if self._tmp_store_ is not None:
-            keys = keys.union(set(self._tmp_store.__iter__()))
-        return iter(keys.difference(self._deleted_keys))
+    async def list_dir(self, prefix):
+        if prefix.endswith("/"):
+            dir_prefix = prefix
+        else:
+            dir_prefix = prefix + "/"
+        async for key in self.list():
+            if key.startswith(dir_prefix):
+                key = key.removeprefix(dir_prefix)
+                if "/" in key:
+                    yield key.split("/")[0]
+                else:
+                    yield key
+
+    async def list_prefix(self, prefix):
+        async for key in self.list():
+            if key.startswith(prefix):
+                yield key
 
 
 class ConvertedInternalStore(InternalStore):

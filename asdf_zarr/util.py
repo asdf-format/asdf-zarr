@@ -2,8 +2,8 @@ import copy
 
 import fsspec
 
-from ._zarr_compat import zarr
-from ._zarr_compat import storage
+import zarr
+from zarr import storage
 
 
 def encode_storage(store):
@@ -21,7 +21,8 @@ def encode_storage(store):
     obj_dict : dictionary encoding
     """
     obj_dict = {"type_string": store.__class__.__name__}
-    if isinstance(store, (storage.DirectoryStore, storage.NestedDirectoryStore)) and not isinstance(store, storage.TempStore):
+    #if isinstance(store, (storage.DirectoryStore, storage.NestedDirectoryStore)) and not isinstance(store, storage.TempStore):
+    if isinstance(store, (storage.LocalStore)):
         # dimension separator is _dimension separator and should be
         # read from the zarray itself, not the store
         obj_dict["normalize_keys"] = store.normalize_keys
@@ -34,7 +35,7 @@ def encode_storage(store):
         obj_dict["mode"] = store.mode
         # store.fs.to_json to get full filesystem (see fsspec.AbstractFileSystem.from_json)
         obj_dict["fs"] = store.fs.to_json()
-    elif isinstance(store, storage.KVStore):
+    elif isinstance(store, storage.MemoryStore):
         obj_dict["map"] = {k: store[k] for k in store}
     else:
         raise NotImplementedError(f"zarr.storage.Store subclass {store.__class__} not supported")
@@ -62,6 +63,6 @@ def decode_storage(obj_dict):  # TODO needs kwargs for dimension sep?
     if "fs" in kwargs and type_string == "FSStore":
         kwargs["fs"] = fsspec.AbstractFileSystem.from_json(kwargs["fs"])
         args.append(kwargs.pop("path"))
-    elif "map" in kwargs and type_string == "KVStore":
+    elif "map" in kwargs and type_string in ("KVStore", "MemoryStore"):
         args.append(kwargs.pop("map"))
     return getattr(storage, type_string)(*args, **kwargs)

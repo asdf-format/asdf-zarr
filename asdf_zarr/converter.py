@@ -1,8 +1,8 @@
 import json
 
 import asdf
+import zarr
 
-from ._zarr_compat import zarr
 from . import util
 from . import storage
 
@@ -11,12 +11,12 @@ from . import storage
 
 class ZarrConverter(asdf.extension.Converter):
     tags = ["asdf://asdf-format.org/zarr/tags/zarr-*"]
-    types = ["zarr.core.Array"]
+    types = ["zarr.core.array.Array"]
 
     def to_yaml_tree(self, obj, tag, ctx):
-        chunk_store = obj.chunk_store or obj.store
+        chunk_store = obj.store
         # these storage types require conversion to an internal store so make it the default
-        if isinstance(chunk_store, (zarr.storage.KVStore, zarr.storage.MemoryStore, zarr.storage.TempStore)):
+        if isinstance(chunk_store, zarr.storage.MemoryStore):
             chunk_store = storage.ConvertedInternalStore(chunk_store)
         if isinstance(chunk_store, storage.InternalStore):
             # TODO should we enforce no zarr compression here?
@@ -56,7 +56,7 @@ class ZarrConverter(asdf.extension.Converter):
             # TODO should we enforce no zarr compression here?
 
             # load the meta data into memory
-            store = zarr.storage.KVStore({".zarray": json.dumps(node[".zarray"])})
+            store = zarr.storage.MemoryStore({".zarray": json.dumps(node[".zarray"])})
 
             # setup an InternalStore to read block data (when requested)
             zarray_meta = node[".zarray"]
