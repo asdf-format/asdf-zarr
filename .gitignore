@@ -28,6 +28,7 @@ docs/_build
 .project
 .pydevproject
 .settings
+.python-version
 
 # Pycharm editor project files
 .idea

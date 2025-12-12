@@ -8,6 +8,8 @@ import asdf
 import numpy
 import zarr
 
+from zarr.core.common import concurrent_map
+
 
 MISSING_CHUNK = -1
 
@@ -147,98 +149,24 @@ class WrappedStore(zarr.abc.store.Store):
             yield key
 
 
-# TODO should probably be abstract or...
-# ConvertedInternal store is very similar (just using existing store instead of temp)
-# and I think it should not use temp (wouldn't that mean a modification after conversison
-# results in temp modification and not the original store?)
-# ReadInternalStore is a bit different as it has to map queries to ASDF blocks
-class _InternalStore(zarr.abc.store.Store):
-    supports_deletes = True
+class ASDFBlockStore(zarr.abc.store.Store):
     supports_listing = True
     supports_partial_writes = False
-    supports_writes = True
 
-    def __init__(self, store=None, read_only=False):
+    def __init__(self, ctx, chunk_block_map_index, zarray_meta, tmp_path=None, read_only=False):
         super().__init__()
-        self._wrapped_store_ = store
-        self._read_only = read_only
-        self._deleted_keys = set()
 
-    @property
-    def read_only(self):
-        return self._read_only
-
-    def __eq__(self, other):
-        # TODO make this robust
-        return id(self) == id(other)
-
-    @property
-    def _wrapped_store(self):
-        if self._wrapped_store_ is None:
+        if tmp_path is None:
             self._tmp_dir = tempfile.TemporaryDirectory()
-            self._wrapped_store_ = zarr.storage.LocalStore(self._tmp_dir.name, read_only=self.read_only)
-        return self._wrapped_store_
-
-    async def set(self, key, value):
-        if self.read_only:
-            raise ValueError("store was opened in read-only mode and does not support writing")
-        if key in self._deleted_keys:
-            self._deleted_keys.remove(key)
-        return await self._wrapped_store.set(key, value)
-
-    async def get(self, key, prototype=None, byte_range=None):
-        if key in self._deleted_keys or self._wrapped_store_ is None:
-            raise FileNotFoundError(f"{key}")
-        return await self._wrapped_store.get(key, prototype, byte_range)
-
-    async def delete(self, key):
-        if self.read_only:
-            raise ValueError("store was opened in read-only mode and does not support writing")
-        self._deleted_keys.add(key)
-
-    async def exists(self, key):
-        if key in self._deleted_keys:
-            return False
-        return await self._wrapped_store.exists(key)
-
-    async def get_partial_values(self, prototype=None, key_ranges=None):
-        # TODO handle deleted keys
-        return await self._wrapped_store.get_partial_values(prototype, key_ranges)
-
-    async def list(self):
-        async for key in self._wrapped_store.list():
-            if key not in self._deleted_keys:
-                yield key
-
-    async def list_dir(self, prefix):
-        if prefix.endswith("/"):
-            dir_prefix = prefix
+            tmp_path = self._tmp_dir.name
         else:
-            dir_prefix = prefix + "/"
-        async for key in self.list():
-            if key.startswith(dir_prefix):
-                key = key.removeprefix(dir_prefix)
-                if "/" in key:
-                    yield key.split("/")[0]
-                else:
-                    yield key
+            tmp_path = str(tmp_path)
+        self._tmp_store = zarr.storage.LocalStore(tmp_path)
+        self._zarray_meta = zarr.buffer.cpu.Buffer.from_bytes(json.dumps(zarray_meta).encode("ascii"))
+        #self._tmp_store.set(".zarray", zarr.buffer.cpu.Buffer.from_bytes(json.dumps(zarray_meta).encode("ascii")))
 
-    async def list_prefix(self, prefix):
-        async for key in self.list():
-            if key.startswith(prefix):
-                yield key
-
-
-class ASDFBlockStore(_InternalStore):
-    supports_deletes = True
-    supports_listing = True
-    supports_partial_writes = False
-    supports_writes = True
-
-    def __init__(self, ctx, chunk_block_map_index, zarray_meta, read_only=False):
-        super().__init__()
-        buffer = json.dumps(zarray_meta).encode("ascii")
-        self._zarray_meta_buffer = zarr.buffer.cpu.Buffer.from_bytes(buffer)
+        self._deleted_keys = set()
+        self._read_only = read_only
 
         # the chunk_block_map contains block indices
         # organized in an array shaped like the chunks
@@ -265,16 +193,56 @@ class ASDFBlockStore(_InternalStore):
             self._chunk_asdf_keys[chunk_key] = asdf_key
             self._chunk_callbacks[chunk_key] = ctx.get_block_data_callback(block_index, asdf_key)
 
+    @property
+    def read_only(self):
+        return self._read_only
+
+    @property
+    def supports_writes(self):
+        return not self.read_only
+
+    @property
+    def supports_deletes(self):
+        return not self.read_only
+
     def __eq__(self, other):
-        # TODO make this robust
-        return id(self) == id(other)
+        if not isinstance(other, ASDFBlockStore):
+            return False
+        if self._tmp_store != other._tmp_store:
+            return False
+        if self._deleted_keys != other._deleted_keys:
+            return False
+        if self._read_only != other._read_only:
+            return False
+        if self._zarray_meta != other._zarray_meta:
+            return False
+        if self._chunk_callbacks != other._chunk_callbacks:
+            return False
+        return True
+
+    def __repr__(self):
+        return f"ASDFBlockStore({id(self)})"
 
     async def set(self, key, value):
-        raise ValueError("store was opened in read-only mode and does not support writing")
+        if not self.supports_writes:
+            raise ValueError("store was opened in read-only mode and does not support writing")
+        if key in self._deleted_keys:
+            self._deleted_keys.remove(key)
+        return await self._tmp_store.set(key, value)
 
     async def get(self, key, prototype=None, byte_range=None):
+        # first check deleted_keys
+        if key in self._deleted_keys:
+            raise FileNotFoundError(f"{key}")
+
+        # then tmp_store
+        if self._tmp_store.exists(key):
+            return await self._tmp_store.get(key, prototype, byte_range)
+
         if key == ".zarray":
-            return self._zarray_meta_buffer
+            return self._zarray_meta
+
+        # then blocks
         if key not in self._chunk_callbacks:
             raise FileNotFoundError(f"{key}")
         data = self._chunk_callbacks[key]()
@@ -282,23 +250,44 @@ class ASDFBlockStore(_InternalStore):
         return zarr.buffer.cpu.Buffer.from_bytes(data)
 
     async def delete(self, key):
-        raise ValueError("store was opened in read-only mode and does not support writing")
+        if not self.supports_deletes:
+            raise ValueError("store was opened in read-only mode and does not support writing")
+        self._deleted_keys.add(key)
 
     async def exists(self, key):
+        # first check deleted keys
+        if key in self._deleted_keys:
+            return False
+
+        # then tmp_store
+        if await self._tmp_store.exists(key):
+            return True
+
         if key == ".zarray":
             return True
+
+        # then blocks
         return key in self._chunk_callbacks
 
     async def get_partial_values(self, prototype=None, key_ranges=None):
         # All the key-ranges arguments goes with the same prototype
-        async def _get(key: str, byte_range: ByteRequest | None) -> Buffer | None:
+        async def _get(key: str, byte_range):
             return await self.get(key, prototype=prototype, byte_range=byte_range)
 
         return await concurrent_map(key_ranges, _get, limit=None)
 
     async def list(self):
-        async for key in self._chunk_callbacks:
-            yield key
+        reported = set()
+        async for key in self._tmp_store.list():
+            if key not in self._deleted_keys and key not in reported:
+                reported.add(key)
+                yield key
+        if ".zarray" not in reported and ".zarray" not in self._deleted_keys:
+            yield ".zarray"
+        for key in self._chunk_callbacks:
+            if key not in self._deleted_keys and key not in reported:
+                reported.add(key)
+                yield key
 
     async def list_dir(self, prefix):
         if prefix.endswith("/"):
