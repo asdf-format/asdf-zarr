@@ -75,7 +75,7 @@ class TestASDFBlockStore(StoreTests):
         assert store.__class__(**store_kwargs) == store.__class__(**store_kwargs)
 
 
-def test_asdf_block_store():
+async def test_asdf_block_store():
     zarray = {
         "zarr_format": 2,
         "shape": (2, 3),

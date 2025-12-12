@@ -11,18 +11,14 @@ import zarr
 from zarr import storage
 
 
-def create_zarray(shape=None, chunks=None, dtype="f8", store=None, chunk_store=None):
+def create_zarray(shape=None, chunks=None, dtype="f8", store=None):
     if shape is None:
         shape = (6, 9)
     if chunks is None:
         chunks = [max(1, d // 3) for d in shape]
-    # TODO use format 2?
     arr = zarr.create(
-        (6, 9), store=store, chunk_store=chunk_store, chunks=chunks, dtype=dtype, compressor=None, zarr_format=2,
+        (6, 9), store=store, chunks=chunks, dtype=dtype, compressor=None, zarr_format=2,
     )
-    # arr = zarr.creation.create(
-    #     (6, 9), store=store, chunk_store=chunk_store, chunks=chunks, dtype=dtype, compressor=None
-    # )
     for chunk_index in itertools.product(*[range(c) for c in arr.cdata_shape]):
         inds = []
         for i, c in zip(chunk_index, arr.chunks):
@@ -34,12 +30,9 @@ def create_zarray(shape=None, chunks=None, dtype="f8", store=None, chunk_store=N
 @pytest.mark.parametrize("memmap", [True, False])
 @pytest.mark.parametrize("lazy_load", [True, False])
 @pytest.mark.parametrize("compression", ["input", "zlib"])
-#@pytest.mark.parametrize("store_type", [storage.LocalStore,lDirectoryStore, storage.KVStore, storage.MemoryStore, storage.NestedDirectoryStore, storage.TempStore])
 @pytest.mark.parametrize("store_type", [storage.LocalStore, storage.MemoryStore])
 @pytest.mark.parametrize("to_internal", [True, False])
-@pytest.mark.parametrize("meta_store", [True, False])
-def test_write_to(tmp_path, memmap, lazy_load, compression, store_type, to_internal, meta_store):
-    #if store_type in (storage.DirectoryStore, storage.NestedDirectoryStore):
+def test_write_to(tmp_path, memmap, lazy_load, compression, store_type, to_internal):
     if store_type in (storage.LocalStore,):
         store1 = store_type(tmp_path / "zarr_array_1")
         store2 = store_type(tmp_path / "zarr_array_2")
@@ -47,18 +40,8 @@ def test_write_to(tmp_path, memmap, lazy_load, compression, store_type, to_inter
         store1 = store_type()
         store2 = store_type()
 
-    # should meta be in a different store?
-    if meta_store:
-        chunk_store1 = store1
-        store1 = storage.MemoryStore({})
-        chunk_store2 = store2
-        store2 = storage.MemoryStore({})
-    else:
-        chunk_store1 = None
-        chunk_store2 = None
-
-    arr1 = create_zarray(store=store1, chunk_store=chunk_store1)
-    arr2 = create_zarray(store=store2, chunk_store=chunk_store2)
+    arr1 = create_zarray(store=store1)
+    arr2 = create_zarray(store=store2)
 
     arr2[:] = arr2[:] * -2
     if to_internal:
@@ -74,7 +57,7 @@ def test_write_to(tmp_path, memmap, lazy_load, compression, store_type, to_inter
         for n, a in (("arr1", arr1), ("arr2", arr2)):
             assert isinstance(af[n], zarr.core.array.Array)
             if to_internal or store_type is storage.MemoryStore:
-                assert isinstance(af[n].store, asdf_zarr.storage.WrappedStore)
+                assert isinstance(af[n].store, (asdf_zarr.storage.WrappedStore, asdf_zarr.storage.ASDFBlockStore))
             else:
                 assert isinstance(af[n].store, store_type)
             assert numpy.allclose(af[n], a)

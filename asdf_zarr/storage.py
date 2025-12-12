@@ -233,10 +233,10 @@ class ASDFBlockStore(zarr.abc.store.Store):
     async def get(self, key, prototype=None, byte_range=None):
         # first check deleted_keys
         if key in self._deleted_keys:
-            raise FileNotFoundError(f"{key}")
+            return None
 
         # then tmp_store
-        if self._tmp_store.exists(key):
+        if await self._tmp_store.exists(key):
             return await self._tmp_store.get(key, prototype, byte_range)
 
         if key == ".zarray":
@@ -244,7 +244,7 @@ class ASDFBlockStore(zarr.abc.store.Store):
 
         # then blocks
         if key not in self._chunk_callbacks:
-            raise FileNotFoundError(f"{key}")
+            return None
         data = self._chunk_callbacks[key]()
         # TODO is this the right type?
         return zarr.buffer.cpu.Buffer.from_bytes(data)
