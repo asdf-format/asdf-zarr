@@ -37,9 +37,6 @@ jobs:
         - linux: coverage
           name: Python 3.11 coverage
           python-version: 3.11
-        - linux: coverage
-          name: Python 3.10 coverage
-          python-version: 3.10
       coverage: 'codecov'
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
