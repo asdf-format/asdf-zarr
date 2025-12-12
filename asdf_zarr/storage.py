@@ -67,11 +67,84 @@ def _generate_chunk_map_callback(zarray, chunk_key_block_index_map):
 
 
 def to_internal(zarray):
-    if isinstance(zarray.store, InternalStore):
+    if isinstance(zarray.store, WrappedStore):
         return zarray
     # make a new internal store based off an existing store
-    internal_store = InternalStore(zarray.store)
-    return zarr.open(zarray.store, chunk_store=internal_store)
+    internal_store = WrappedStore(zarray.store)
+    return zarr.open(internal_store)
+
+
+# Let me think about this again. For an ASDF file with interal blocks
+# that store chunk data we will want a custom store (ASDFBlockStore)
+# which should (if not read-only) allow modification of the chunks
+# by making TempStore changes that sit ON TOP of the block data.
+# This TempStore can also be used to store .zarray etc information
+#
+# For an external store that we want to write to internal ASDF
+# blocks when the file is written we will need a wrapper class
+# that simply shadows another store.
+class WrappedStore(zarr.abc.store.Store):
+    def __init__(self, store=None, read_only=False):
+        super().__init__()
+        self._wrapped_store = store
+        self._read_only = read_only
+
+    @property
+    def supports_writes(self):
+        return self._wrapped_store.supports_writes
+
+    @property
+    def supports_deletes(self):
+        return self._wrapped_store.supports_deletes
+
+    @property
+    def supports_listing(self):
+        return self._wrapped_store.supports_listing
+
+    @property
+    def supports_partial_writes(self):
+        return self._wrapped_store.supports_partial_writes
+
+    @property
+    def read_only(self):
+        return self._read_only
+
+    def __eq__(self, other):
+        return isinstance(other, WrappedStore) and self._wrapped_store == other._wrapped_store
+
+    def __repr__(self):
+        return f"WrappedStore({self._wrapped_store.__class__.__name__}, '{self._wrapped_store}')"
+
+    async def set(self, key, value):
+        if self.read_only:
+            raise ValueError("store was opened in read-only mode and does not support writing")
+        return await self._wrapped_store.set(key, value)
+
+    async def get(self, key, prototype=None, byte_range=None):
+        return await self._wrapped_store.get(key, prototype, byte_range)
+
+    async def delete(self, key):
+        if self.read_only:
+            raise ValueError("store was opened in read-only mode and does not support writing")
+        return await self._wrapped_store.delete(key)
+
+    async def exists(self, key):
+        return await self._wrapped_store.exists(key)
+
+    async def get_partial_values(self, prototype=None, key_ranges=None):
+        return await self._wrapped_store.get_partial_values(prototype, key_ranges)
+
+    async def list(self):
+        async for key in self._wrapped_store.list():
+            yield key
+
+    async def list_dir(self, prefix):
+        async for key in self._wrapped_store.list_dir(prefix):
+            yield key
+
+    async def list_prefix(self, prefix):
+        async for key in self._wrapped_store.list_prefix(prefix):
+            yield key
 
 
 # TODO should probably be abstract or...
@@ -79,7 +152,7 @@ def to_internal(zarray):
 # and I think it should not use temp (wouldn't that mean a modification after conversison
 # results in temp modification and not the original store?)
 # ReadInternalStore is a bit different as it has to map queries to ASDF blocks
-class InternalStore(zarr.abc.store.Store):
+class _InternalStore(zarr.abc.store.Store):
     supports_deletes = True
     supports_listing = True
     supports_partial_writes = False
@@ -156,14 +229,13 @@ class InternalStore(zarr.abc.store.Store):
                 yield key
 
 
-class ASDFBlockStore(zarr.abc.store.Store):
-    supports_deletes = False
+class ASDFBlockStore(_InternalStore):
+    supports_deletes = True
     supports_listing = True
     supports_partial_writes = False
-    supports_writes = False
-    read_only = True
+    supports_writes = True
 
-    def __init__(self, ctx, chunk_block_map_index, zarray_meta):
+    def __init__(self, ctx, chunk_block_map_index, zarray_meta, read_only=False):
         super().__init__()
         buffer = json.dumps(zarray_meta).encode("ascii")
         self._zarray_meta_buffer = zarr.buffer.cpu.Buffer.from_bytes(buffer)
