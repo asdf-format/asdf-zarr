@@ -76,15 +76,6 @@ def to_internal(zarray):
     return zarr.open(internal_store)
 
 
-# Let me think about this again. For an ASDF file with interal blocks
-# that store chunk data we will want a custom store (ASDFBlockStore)
-# which should (if not read-only) allow modification of the chunks
-# by making TempStore changes that sit ON TOP of the block data.
-# This TempStore can also be used to store .zarray etc information
-#
-# For an external store that we want to write to internal ASDF
-# blocks when the file is written we will need a wrapper class
-# that simply shadows another store.
 class WrappedStore(zarr.abc.store.Store):
     def __init__(self, store=None, read_only=False):
         super().__init__()
@@ -163,7 +154,6 @@ class ASDFBlockStore(zarr.abc.store.Store):
             tmp_path = str(tmp_path)
         self._tmp_store = zarr.storage.LocalStore(tmp_path)
         self._zarray_meta = zarr.buffer.cpu.Buffer.from_bytes(json.dumps(zarray_meta).encode("ascii"))
-        #self._tmp_store.set(".zarray", zarr.buffer.cpu.Buffer.from_bytes(json.dumps(zarray_meta).encode("ascii")))
 
         self._deleted_keys = set()
         self._read_only = read_only
@@ -246,7 +236,6 @@ class ASDFBlockStore(zarr.abc.store.Store):
         if key not in self._chunk_callbacks:
             return None
         data = self._chunk_callbacks[key]()
-        # TODO is this the right type?
         return zarr.buffer.cpu.Buffer.from_bytes(data)
 
     async def delete(self, key):

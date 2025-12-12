@@ -56,10 +56,9 @@ class ZarrConverter(asdf.extension.Converter):
             store = storage.ASDFBlockStore(ctx, chunk_block_map_index, zarray_meta)
 
             # TODO read/write mode here
-            obj = zarr.open_array(store=store)
+            obj = zarr.open_array(store=store, zarr_format=2)
             return obj
 
         store = util.decode_storage(node["store"])
-        # TODO support more than format 2
         obj = zarr.open_array(store=store, zarr_format=2)
         return obj
