@@ -9,6 +9,7 @@ import numpy
 import zarr
 
 from zarr.core.common import concurrent_map
+from zarr.core.sync import sync
 
 
 MISSING_CHUNK = -1
@@ -19,7 +20,7 @@ async def _async_iter_to_list(async_iter):
 
 
 def async_iter_to_list(async_iter):
-    return asyncio.run(_async_iter_to_list(async_iter))
+    return sync(_async_iter_to_list(async_iter))
 
 
 def _iter_chunk_keys(zarray, only_initialized=False):
@@ -47,7 +48,7 @@ def _iter_chunk_keys(zarray, only_initialized=False):
 
 def _generate_chunk_data_callback(zarray, chunk_key):
     def chunk_data_callback(zarray=zarray, chunk_key=chunk_key):
-        return numpy.frombuffer(asyncio.run(zarray.store.get(chunk_key)).to_bytes(), dtype="uint8")
+        return numpy.frombuffer(sync(zarray.store.get(chunk_key)).to_bytes(), dtype="uint8")
 
     return chunk_data_callback
 
