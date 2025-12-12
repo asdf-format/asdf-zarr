@@ -1,25 +1,38 @@
+import asyncio
 import itertools
 import json
 import math
+import tempfile
 
 import asdf
 import numpy
 import zarr
 
+from zarr.core.common import concurrent_map
+from zarr.core.sync import sync
+
 
 MISSING_CHUNK = -1
+
+
+async def _async_iter_to_list(async_iter):
+    return [gen async for gen in async_iter]
+
+
+def async_iter_to_list(async_iter):
+    return sync(_async_iter_to_list(async_iter))
 
 
 def _iter_chunk_keys(zarray, only_initialized=False):
     """Using zarray metadata iterate over chunk keys"""
     if only_initialized:
-        for k in zarr.storage.listdir(zarray.chunk_store):
-            if k == ".zarray":
+        for k in async_iter_to_list(zarray.store.list()):
+            if k in (".zarray", ".zattrs"):
                 continue
             yield k
         return
     # load meta
-    zarray_meta = json.loads(zarray.store[".zarray"])
+    zarray_meta = zarray.metadata.to_dict()
     dimension_separator = zarray_meta.get("dimension_separator", ".")
 
     # make blocks and map them to the internal kv store
@@ -35,7 +48,7 @@ def _iter_chunk_keys(zarray, only_initialized=False):
 
 def _generate_chunk_data_callback(zarray, chunk_key):
     def chunk_data_callback(zarray=zarray, chunk_key=chunk_key):
-        return numpy.frombuffer(zarray.chunk_store.get(chunk_key), dtype="uint8")
+        return numpy.frombuffer(sync(zarray.store.get(chunk_key)).to_bytes(), dtype="uint8")
 
     return chunk_data_callback
 
@@ -45,7 +58,7 @@ def _generate_chunk_map_callback(zarray, chunk_key_block_index_map):
     def chunk_map_callback(zarray=zarray, chunk_key_block_index_map=chunk_key_block_index_map):
         chunk_map = numpy.zeros(zarray.cdata_shape, dtype="int32")
         chunk_map[:] = MISSING_CHUNK  # set all as uninitialized
-        zarray_meta = json.loads(zarray.store[".zarray"])
+        zarray_meta = zarray.metadata.to_dict()
         dimension_separator = zarray_meta.get("dimension_separator", ".")
         for k in _iter_chunk_keys(zarray, only_initialized=True):
             index = chunk_key_block_index_map[k]
@@ -57,81 +70,94 @@ def _generate_chunk_map_callback(zarray, chunk_key_block_index_map):
 
 
 def to_internal(zarray):
-    if isinstance(zarray.chunk_store, InternalStore):
+    if isinstance(zarray.store, WrappedStore):
         return zarray
     # make a new internal store based off an existing store
-    internal_store = ConvertedInternalStore(zarray.chunk_store or zarray.store)
-    return zarr.open(zarray.store, chunk_store=internal_store)
+    internal_store = WrappedStore(zarray.store)
+    return zarr.open(internal_store)
 
 
-class InternalStore(zarr.storage.Store):
-    def __init__(self):
+class WrappedStore(zarr.abc.store.Store):
+    def __init__(self, store=None, read_only=False):
         super().__init__()
-        self._tmp_store_ = None
-        self._deleted_keys = set()
+        self._wrapped_store = store
+        self._read_only = read_only
 
     @property
-    def _tmp_store(self):
-        if self._tmp_store_ is None:
-            # TODO options to control where TempStore is stored
-            self._tmp_store_ = zarr.storage.TempStore()
-        return self._tmp_store_
+    def supports_writes(self):
+        return self._wrapped_store.supports_writes
 
-    def __setitem__(self, key, value):
-        if key in self._deleted_keys:
-            self._deleted_keys.remove(key)
-        self._tmp_store[key] = value
+    @property
+    def supports_deletes(self):
+        return self._wrapped_store.supports_deletes
 
-    def __delitem__(self, key):
-        self._deleted_keys.add(key)
+    @property
+    def supports_listing(self):
+        return self._wrapped_store.supports_listing
 
-    def __len__(self):
-        return len(set(self.__iter__()))
+    @property
+    def supports_partial_writes(self):
+        return self._wrapped_store.supports_partial_writes
 
-    def listdir(self, path):
-        if path:
-            raise NotImplementedError("path argument not supported by InternalStore.listdir")
-        return list(self.__iter__())
+    @property
+    def read_only(self):
+        return self._read_only
 
-    def __getitem__(self, key):
-        if key in self._deleted_keys or self._tmp_store_ is None:
-            raise KeyError(f"{key}")
-        return self._tmp_store.__getitem__(key)
+    def __eq__(self, other):
+        return isinstance(other, WrappedStore) and self._wrapped_store == other._wrapped_store
 
-    def __iter__(self):
-        keys = set()
-        if self._tmp_store_ is not None:
-            keys = keys.union(set(self._tmp_store.__iter__()))
-        return iter(keys.difference(self._deleted_keys))
+    def __repr__(self):
+        return f"WrappedStore({self._wrapped_store.__class__.__name__}, '{self._wrapped_store}')"
+
+    async def set(self, key, value):
+        if self.read_only:
+            raise ValueError("store was opened in read-only mode and does not support writing")
+        return await self._wrapped_store.set(key, value)
+
+    async def get(self, key, prototype=None, byte_range=None):
+        return await self._wrapped_store.get(key, prototype, byte_range)
+
+    async def delete(self, key):
+        if self.read_only:
+            raise ValueError("store was opened in read-only mode and does not support writing")
+        return await self._wrapped_store.delete(key)
+
+    async def exists(self, key):
+        return await self._wrapped_store.exists(key)
+
+    async def get_partial_values(self, prototype=None, key_ranges=None):
+        return await self._wrapped_store.get_partial_values(prototype, key_ranges)
+
+    async def list(self):
+        async for key in self._wrapped_store.list():
+            yield key
+
+    async def list_dir(self, prefix):
+        async for key in self._wrapped_store.list_dir(prefix):
+            yield key
+
+    async def list_prefix(self, prefix):
+        async for key in self._wrapped_store.list_prefix(prefix):
+            yield key
 
 
-class ConvertedInternalStore(InternalStore):
-    def __init__(self, existing):
+class ASDFBlockStore(zarr.abc.store.Store):
+    supports_listing = True
+    supports_partial_writes = False
+
+    def __init__(self, ctx, chunk_block_map_index, zarray_meta, tmp_path=None, read_only=False):
         super().__init__()
-        self._existing_store = existing
-        self._chunk_asdf_keys = {}
-        self._chunk_block_map_asdf_key = None
 
-    def __getitem__(self, key):
-        if key in self._deleted_keys:
-            raise KeyError(f"{key}")
-        try:
-            return super().__getitem__(key)
-        except KeyError:
-            pass
-        return self._existing_store.__getitem__(key)
+        if tmp_path is None:
+            self._tmp_dir = tempfile.TemporaryDirectory()
+            tmp_path = self._tmp_dir.name
+        else:
+            tmp_path = str(tmp_path)
+        self._tmp_store = zarr.storage.LocalStore(tmp_path)
+        self._zarray_meta = zarr.buffer.cpu.Buffer.from_bytes(json.dumps(zarray_meta).encode("ascii"))
 
-    def __iter__(self):
-        keys = set(super().__iter__())
-        keys = keys.union(set(self._existing_store.__iter__()))
-        return iter(keys.difference(self._deleted_keys))
-
-
-class ReadInternalStore(InternalStore):
-    def __init__(self, ctx, chunk_block_map_index, zarray_meta):
-        super().__init__()
-
-        self._sep = zarray_meta.get("dimension_separator", ".")
+        self._deleted_keys = set()
+        self._read_only = read_only
 
         # the chunk_block_map contains block indices
         # organized in an array shaped like the chunks
@@ -149,70 +175,124 @@ class ReadInternalStore(InternalStore):
         # reorganize the map into a set and claim the block indices
         self._chunk_callbacks = {}
         self._chunk_asdf_keys = {}
+        _sep = zarray_meta.get("dimension_separator", ".")
         for coord in numpy.transpose(numpy.nonzero(self._chunk_block_map != MISSING_CHUNK)):
             coord = tuple(coord)
             block_index = int(self._chunk_block_map[coord])
-            chunk_key = self._sep.join((str(c) for c in tuple(coord)))
+            chunk_key = _sep.join((str(c) for c in tuple(coord)))
             asdf_key = ctx.generate_block_key()
             self._chunk_asdf_keys[chunk_key] = asdf_key
             self._chunk_callbacks[chunk_key] = ctx.get_block_data_callback(block_index, asdf_key)
 
-    def __getstate__(self):
-        state = {}
-        state["_sep"] = self._sep
-        if hasattr(self, "_chunk_info"):
-            # handle instance that was already pickled and unpickled
-            state["_chunk_info"] = self._chunk_info
-        else:
-            # and instance that was not yet pickled
+    @property
+    def read_only(self):
+        return self._read_only
 
-            # for each callback, get the file uri and block offset
-            def _callback_info(cb):
-                return {
-                    "offset": cb(_attr="offset"),
-                    "uri": cb(_attr="_fd")().uri,
-                }
+    @property
+    def supports_writes(self):
+        return not self.read_only
 
-            state["_chunk_info"] = {k: _callback_info(self._chunk_callbacks[k]) for k in self._chunk_callbacks}
-        return state
+    @property
+    def supports_deletes(self):
+        return not self.read_only
 
-    def __setstate__(self, state):
-        self._sep = state["_sep"]
+    def __eq__(self, other):
+        if not isinstance(other, ASDFBlockStore):
+            return False
+        if self._tmp_store != other._tmp_store:
+            return False
+        if self._deleted_keys != other._deleted_keys:
+            return False
+        if self._read_only != other._read_only:
+            return False
+        if self._zarray_meta != other._zarray_meta:
+            return False
+        if self._chunk_callbacks != other._chunk_callbacks:
+            return False
+        return True
 
-        def _to_callback(info):
-            def cb():
-                with asdf.generic_io.get_file(info["uri"], mode="r") as gf:
-                    return asdf._block.io.read_block(gf, info["offset"])[-1]
+    def __repr__(self):
+        return f"ASDFBlockStore({id(self)})"
 
-            return cb
-
-        self._chunk_info = state["_chunk_info"]
-        self._chunk_callbacks = {k: _to_callback(self._chunk_info[k]) for k in self._chunk_info}
-        # as __init__ will not be called on self, set up attributed expected
-        # due to the parent InternalStore class
-        self._tmp_store_ = None
-        self._deleted_keys = set()
-
-    def _sep_key(self, key):
-        if self._sep is None:
-            return key
-        return key.split(self._sep)
-
-    def _coords(self, key):
-        return tuple([int(sk) for sk in self._sep_key(key)])
-
-    def __getitem__(self, key):
+    async def set(self, key, value):
+        if not self.supports_writes:
+            raise ValueError("store was opened in read-only mode and does not support writing")
         if key in self._deleted_keys:
-            raise KeyError(f"{key}")
-        try:
-            return super().__getitem__(key)
-        except KeyError:
-            pass
-        if key not in self._chunk_callbacks:
-            raise KeyError(f"{key}")
-        return self._chunk_callbacks.get(key, None)()
+            self._deleted_keys.remove(key)
+        return await self._tmp_store.set(key, value)
 
-    def __iter__(self):
-        keys = set(super().__iter__())
-        keys = keys.union(set(self._chunk_callbacks))
-        return iter(keys.difference(self._deleted_keys))
+    async def get(self, key, prototype=None, byte_range=None):
+        # first check deleted_keys
+        if key in self._deleted_keys:
+            return None
+
+        # then tmp_store
+        if await self._tmp_store.exists(key):
+            return await self._tmp_store.get(key, prototype, byte_range)
+
+        if key == ".zarray":
+            return self._zarray_meta
+
+        # then blocks
+        if key not in self._chunk_callbacks:
+            return None
+        data = self._chunk_callbacks[key]()
+        return zarr.buffer.cpu.Buffer.from_bytes(data)
+
+    async def delete(self, key):
+        if not self.supports_deletes:
+            raise ValueError("store was opened in read-only mode and does not support writing")
+        self._deleted_keys.add(key)
+
+    async def exists(self, key):
+        # first check deleted keys
+        if key in self._deleted_keys:
+            return False
+
+        # then tmp_store
+        if await self._tmp_store.exists(key):
+            return True
+
+        if key == ".zarray":
+            return True
+
+        # then blocks
+        return key in self._chunk_callbacks
+
+    async def get_partial_values(self, prototype=None, key_ranges=None):
+        # All the key-ranges arguments goes with the same prototype
+        async def _get(key: str, byte_range):
+            return await self.get(key, prototype=prototype, byte_range=byte_range)
+
+        return await concurrent_map(key_ranges, _get, limit=None)
+
+    async def list(self):
+        reported = set()
+        async for key in self._tmp_store.list():
+            if key not in self._deleted_keys and key not in reported:
+                reported.add(key)
+                yield key
+        if ".zarray" not in reported and ".zarray" not in self._deleted_keys:
+            yield ".zarray"
+        for key in self._chunk_callbacks:
+            if key not in self._deleted_keys and key not in reported:
+                reported.add(key)
+                yield key
+
+    async def list_dir(self, prefix):
+        if prefix.endswith("/"):
+            dir_prefix = prefix
+        else:
+            dir_prefix = prefix + "/"
+        async for key in self.list():
+            if key.startswith(dir_prefix):
+                key = key.removeprefix(dir_prefix)
+                if "/" in key:
+                    yield key.split("/")[0]
+                else:
+                    yield key
+
+    async def list_prefix(self, prefix):
+        async for key in self.list():
+            if key.startswith(prefix):
+                yield key

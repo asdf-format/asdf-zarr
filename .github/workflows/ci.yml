@@ -37,9 +37,6 @@ jobs:
         - linux: coverage
           name: Python 3.11 coverage
           python-version: 3.11
-        - linux: coverage
-          name: Python 3.10 coverage
-          python-version: 3.10
       coverage: 'codecov'
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
@@ -68,4 +65,4 @@ jobs:
       upload_to_pypi: false
       upload_to_anaconda: false
       test_extras: tests
-      test_command: pytest --pyargs asdf_zarr
+      test_command: pytest --pyargs asdf_zarr --asyncio-mode=auto
