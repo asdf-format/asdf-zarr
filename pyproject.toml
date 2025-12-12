@@ -22,8 +22,8 @@ dependencies = [
 [project.optional-dependencies]
 tests = [
   # zarr 3 pins these and we cannot use their test harness with newer version
-  "pytest<8.4",
-  "pytest-asyncio<1.2.0",
+  "pytest",
+  "pytest-asyncio",
 ]
 
 [project.urls]
