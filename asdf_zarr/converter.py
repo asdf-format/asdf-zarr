@@ -16,9 +16,9 @@ class ZarrConverter(asdf.extension.Converter):
     def to_yaml_tree(self, obj, tag, ctx):
         chunk_store = obj.store
         # these storage types require conversion to an internal store so make it the default
-        if isinstance(chunk_store, zarr.storage.MemoryStore):
-            chunk_store = storage.InternalStore(chunk_store)
-        if isinstance(chunk_store, storage.InternalStore):
+        if isinstance(chunk_store, (zarr.storage.MemoryStore, storage.ASDFBlockStore)):
+            chunk_store = storage.WrappedStore(chunk_store)
+        if isinstance(chunk_store, storage.WrappedStore):
             # TODO should we enforce no zarr compression here?
             # include data from this zarr array in the asdf file
             meta = obj.metadata.to_dict()
@@ -49,16 +49,11 @@ class ZarrConverter(asdf.extension.Converter):
     def from_yaml_tree(self, node, tag, ctx):
         if ".zarray" in node and "chunk_block_map" in node:
             # this is an internally stored zarr array
-            # setup an InternalStore to read block data (when requested)
+            # setup an ASDFBlockStore to read block data (when requested)
             zarray_meta = node[".zarray"]
             chunk_block_map_index = node["chunk_block_map"]
 
-            chunk_store = storage.ASDFBlockStore(ctx, chunk_block_map_index, zarray_meta)
-            store = storage.InternalStore(chunk_store)
-
-            buffer = json.dumps(node[".zarray"]).encode("ascii")
-            zarr_buffer = zarr.buffer.cpu.Buffer.from_bytes(buffer)
-            asyncio.run(store.set(".zarray", zarr_buffer))
+            store = storage.ASDFBlockStore(ctx, chunk_block_map_index, zarray_meta)
 
             # TODO read/write mode here
             obj = zarr.open_array(store=store)

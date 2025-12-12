@@ -74,7 +74,7 @@ def test_write_to(tmp_path, memmap, lazy_load, compression, store_type, to_inter
         for n, a in (("arr1", arr1), ("arr2", arr2)):
             assert isinstance(af[n], zarr.core.array.Array)
             if to_internal or store_type is storage.MemoryStore:
-                assert isinstance(af[n].store, asdf_zarr.storage.InternalStore)
+                assert isinstance(af[n].store, asdf_zarr.storage.WrappedStore)
             else:
                 assert isinstance(af[n].store, store_type)
             assert numpy.allclose(af[n], a)
@@ -138,7 +138,7 @@ def test_open_mode(tmp_path, mode):
 def test_to_internal(tmp_path):
     zarr = create_zarray(store=storage.LocalStore(tmp_path))
     internal = asdf_zarr.storage.to_internal(zarr)
-    assert isinstance(internal.store, asdf_zarr.storage.InternalStore)
+    assert isinstance(internal.store, asdf_zarr.storage.WrappedStore)
     # the store shouldn't be wrapped if it's not used for chunks
     if zarr.store is not zarr.store:
         assert isinstance(internal.store, storage.MemoryStore)
