@@ -27,7 +27,7 @@ def _iter_chunk_keys(zarray, only_initialized=False):
     """Using zarray metadata iterate over chunk keys"""
     if only_initialized:
         for k in async_iter_to_list(zarray.store.list()):
-            if k in (".zarray", ".zattrs"):
+            if k in (".zarray", ".zattrs", "zarr.json"):
                 continue
             yield k
         return
@@ -37,7 +37,8 @@ def _iter_chunk_keys(zarray, only_initialized=False):
 
     # make blocks and map them to the internal kv store
     # compute number of chunks (across all axes)
-    chunk_counts = [math.ceil(s / c) for (s, c) in zip(zarray_meta["shape"], zarray_meta["chunks"])]
+    chunk_counts = [math.ceil(s / c) for (s, c) in zip(zarray_meta["shape"],
+                                                       zarray_meta["chunk_grid"]["configuration"]["chunk_shape"])]
 
     # iterate over all chunk keys
     chunk_iter = itertools.product(*[range(c) for c in chunk_counts])
@@ -59,10 +60,10 @@ def _generate_chunk_map_callback(zarray, chunk_key_block_index_map):
         chunk_map = numpy.zeros(zarray.cdata_shape, dtype="int32")
         chunk_map[:] = MISSING_CHUNK  # set all as uninitialized
         zarray_meta = zarray.metadata.to_dict()
-        dimension_separator = zarray_meta.get("dimension_separator", ".")
+        dimension_separator = zarray_meta.get("dimension_separator", "/")
         for k in _iter_chunk_keys(zarray, only_initialized=True):
             index = chunk_key_block_index_map[k]
-            coords = tuple([int(sk) for sk in k.split(dimension_separator)])
+            coords = tuple([int(sk) for sk in k.split(dimension_separator)[1:]]) # Don't need the leading 'c/'
             chunk_map[coords] = index
         return chunk_map
 
@@ -164,7 +165,8 @@ class ASDFBlockStore(zarr.abc.store.Store):
         # so for a zarray with 4 x 5 chunks (dimension 1
         # split into 4 chunks) the chunk_block_map will be
         # 4 x 5
-        cdata_shape = tuple(math.ceil(s / c) for s, c in zip(zarray_meta["shape"], zarray_meta["chunks"]))
+        cdata_shape = tuple(math.ceil(s / c) for s, c in zip(zarray_meta["shape"],
+                                                             zarray_meta["chunk_grid"]["configuration"]["chunk_shape"]))
         self._chunk_block_map_asdf_key = ctx.generate_block_key()
         self._chunk_block_map = numpy.frombuffer(
             ctx.get_block_data_callback(chunk_block_map_index, self._chunk_block_map_asdf_key)(), dtype="int32"
