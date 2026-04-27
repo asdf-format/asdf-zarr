@@ -6,11 +6,13 @@ updates:
     directory: "/"
     target-branch: "main"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
 
   # Maintain dependencies for pip (main)
   - package-ecosystem: "pip"
     directory: "/"
     target-branch: "main"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    exclude-paths:
+      - "requirements-dev.txt"
