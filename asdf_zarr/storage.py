@@ -232,7 +232,7 @@ class ASDFBlockStore(zarr.abc.store.Store):
         if await self._tmp_store.exists(key):
             return await self._tmp_store.get(key, prototype, byte_range)
 
-        if key == ".zarray":
+        if key == "zarr.json":
             return self._zarray_meta
 
         # then blocks
@@ -255,7 +255,7 @@ class ASDFBlockStore(zarr.abc.store.Store):
         if await self._tmp_store.exists(key):
             return True
 
-        if key == ".zarray":
+        if key == "zarr.json":
             return True
 
         # then blocks
@@ -274,8 +274,8 @@ class ASDFBlockStore(zarr.abc.store.Store):
             if key not in self._deleted_keys and key not in reported:
                 reported.add(key)
                 yield key
-        if ".zarray" not in reported and ".zarray" not in self._deleted_keys:
-            yield ".zarray"
+        if "zarr.json" not in reported and "zarr.json" not in self._deleted_keys:
+            yield "zarr.json"
         for key in self._chunk_callbacks:
             if key not in self._deleted_keys and key not in reported:
                 reported.add(key)
