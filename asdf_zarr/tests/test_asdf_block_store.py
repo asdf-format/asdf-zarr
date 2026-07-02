@@ -32,14 +32,14 @@ class TestASDFBlockStore(StoreTests):
     @pytest.fixture()
     def store_kwargs(self, tmp_path) -> dict[str, Any]:
         zarray = {
-            "zarr_format": 2,
+            "zarr_format": 3,
             "shape": (2, 3),
-            "chunks": (1, 1),
-            "dtype": "|u1",
-            "compressor": None,
+            "chunk_grid": {"name": "regular", "configuration": {"chunk_shape": (1, 1)}},
+            "data_type": "uint8",
             "fill_value": 1,
-            "order": "C",
-            "filters": None,
+            "node_type": "array",
+            "chunk_key_encoding": {"name": "default"},
+            "codecs": [{"name": "bytes"}],
         }
         chunk_map = np.full((2, 3), -1, dtype="int32").tobytes()
 
@@ -77,14 +77,14 @@ class TestASDFBlockStore(StoreTests):
 
 async def test_asdf_block_store():
     zarray = {
-        "zarr_format": 2,
+        "zarr_format": 3,
         "shape": (2, 3),
-        "chunks": (1, 1),
-        "dtype": "|u1",
-        "compressor": None,
+        "chunk_grid": {"name": "regular", "configuration": {"chunk_shape": (1, 1)}},
+        "data_type": "uint8",
         "fill_value": 1,
-        "order": "C",
-        "filters": None,
+        "node_type": "array",
+        "chunk_key_encoding": {"name": "default"},
+        "codecs": [{"name": "bytes"}],
     }
     chunk_map = np.full((2, 3), -1, dtype="int32").tobytes()
 
