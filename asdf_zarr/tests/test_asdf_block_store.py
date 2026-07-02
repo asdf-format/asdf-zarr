@@ -99,6 +99,6 @@ async def test_asdf_block_store():
 
     ctx = FakeContext()
     store = ASDFBlockStore(ctx, 42, zarray)
-    z = zarr.open_array(store, zarr_format=2)
+    z = zarr.open_array(store, zarr_format=3)
     assert np.all(z[:] == 1)
     assert z.shape == (2, 3)
