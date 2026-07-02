@@ -33,7 +33,7 @@ def _iter_chunk_keys(zarray, only_initialized=False):
         return
     # load meta
     zarray_meta = zarray.metadata.to_dict()
-    dimension_separator = zarray_meta.get("dimension_separator", ".")
+    dimension_separator = zarray_meta.get("dimension_separator", "/")
 
     # make blocks and map them to the internal kv store
     # compute number of chunks (across all axes)
@@ -177,11 +177,11 @@ class ASDFBlockStore(zarr.abc.store.Store):
         # reorganize the map into a set and claim the block indices
         self._chunk_callbacks = {}
         self._chunk_asdf_keys = {}
-        _sep = zarray_meta.get("dimension_separator", ".")
+        _sep = zarray_meta.get("dimension_separator", "/")
         for coord in numpy.transpose(numpy.nonzero(self._chunk_block_map != MISSING_CHUNK)):
             coord = tuple(coord)
             block_index = int(self._chunk_block_map[coord])
-            chunk_key = _sep.join((str(c) for c in tuple(coord)))
+            chunk_key = "c/" + _sep.join((str(c) for c in tuple(coord)))
             asdf_key = ctx.generate_block_key()
             self._chunk_asdf_keys[chunk_key] = asdf_key
             self._chunk_callbacks[chunk_key] = ctx.get_block_data_callback(block_index, asdf_key)
