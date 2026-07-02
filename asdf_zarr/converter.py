@@ -25,7 +25,7 @@ class ZarrConverter(asdf.extension.Converter):
             obj_dict = {}
 
             # include the meta data in the tree
-            obj_dict[".zarray"] = meta
+            obj_dict["zarr.json"] = meta
 
             # update callbacks
             chunk_key_block_index_map = {}
@@ -47,10 +47,10 @@ class ZarrConverter(asdf.extension.Converter):
         return obj_dict
 
     def from_yaml_tree(self, node, tag, ctx):
-        if ".zarray" in node and "chunk_block_map" in node:
+        if "zarr.json" in node and "chunk_block_map" in node:
             # this is an internally stored zarr array
             # setup an ASDFBlockStore to read block data (when requested)
-            zarray_meta = node[".zarray"]
+            zarray_meta = node["zarr.json"]
             chunk_block_map_index = node["chunk_block_map"]
 
             store = storage.ASDFBlockStore(ctx, chunk_block_map_index, zarray_meta)

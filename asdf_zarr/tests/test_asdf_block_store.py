@@ -26,7 +26,7 @@ class TestASDFBlockStore(StoreTests):
     async def store(self, open_kwargs: dict[str, Any]) -> Store:
         store = await self.store_cls.open(**open_kwargs)
         # delete this default key to allow using most of the inherited tests
-        await store.delete(".zarray")
+        await store.delete("zarr.json")
         return store
 
     @pytest.fixture()
