@@ -63,7 +63,13 @@ def _generate_chunk_map_callback(zarray, chunk_key_block_index_map):
         dimension_separator = zarray_meta.get("dimension_separator", "/")
         for k in _iter_chunk_keys(zarray, only_initialized=True):
             index = chunk_key_block_index_map[k]
-            coords = tuple([int(sk) for sk in k.split(dimension_separator)[1:]]) # Don't need the leading 'c/'
+            # zarr format v3 uses 'c' and the seperator as a prefix for coordinates so that needs to be stripped if there
+            coords = k.split(dimension_separator)
+            try:
+                coords.remove("c")
+            except ValueError:
+                pass
+            coords = tuple([int(sk) for sk in coords])
             chunk_map[coords] = index
         return chunk_map
 
