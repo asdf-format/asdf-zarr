@@ -74,6 +74,13 @@ class TestASDFBlockStore(StoreTests):
         # check that 2 store with the same open args are equal
         assert store.__class__(**store_kwargs) == store.__class__(**store_kwargs)
 
+    def test_store_key_exists(self, open_kwargs: dict[str, Any]) -> None:
+        thisstore = await self.store_cls.open(**open_kwargs)
+        thisttore.delete("fill_value")
+        assert not thisstore.exists("fill_value")
+        assert thisstore.exists("shape")
+        assert thisstore.exists("zarr.json")
+
 
 async def test_asdf_block_store():
     zarray = {
