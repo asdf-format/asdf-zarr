@@ -2,7 +2,6 @@ import copy
 
 import fsspec
 
-import zarr
 from zarr import storage
 
 

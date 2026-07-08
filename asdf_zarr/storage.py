@@ -1,10 +1,8 @@
-import asyncio
 import itertools
 import json
 import math
 import tempfile
 
-import asdf
 import numpy
 import zarr
 
@@ -37,8 +35,10 @@ def _iter_chunk_keys(zarray, only_initialized=False):
 
     # make blocks and map them to the internal kv store
     # compute number of chunks (across all axes)
-    chunk_counts = [math.ceil(s / c) for (s, c) in zip(zarray_meta["shape"],
-                                                       zarray_meta["chunk_grid"]["configuration"]["chunk_shape"])]
+    chunk_counts = [
+        math.ceil(s / c)
+        for (s, c) in zip(zarray_meta["shape"], zarray_meta["chunk_grid"]["configuration"]["chunk_shape"])
+    ]
 
     # iterate over all chunk keys
     chunk_iter = itertools.product(*[range(c) for c in chunk_counts])
@@ -63,7 +63,7 @@ def _generate_chunk_map_callback(zarray, chunk_key_block_index_map):
         dimension_separator = zarray_meta.get("dimension_separator", "/")
         for k in _iter_chunk_keys(zarray, only_initialized=True):
             index = chunk_key_block_index_map[k]
-            # zarr format v3 uses 'c' and the seperator as a prefix for coordinates so that needs to be stripped if there
+            # zarr format v3 uses 'c' and the separator as a prefix for coordinates so that needs to be stripped if there
             coords = k.split(dimension_separator)
             if coords[0].lower() == "c":
                 coords = coords[1:]
@@ -169,8 +169,10 @@ class ASDFBlockStore(zarr.abc.store.Store):
         # so for a zarray with 4 x 5 chunks (dimension 1
         # split into 4 chunks) the chunk_block_map will be
         # 4 x 5
-        cdata_shape = tuple(math.ceil(s / c) for s, c in zip(zarray_meta["shape"],
-                                                             zarray_meta["chunk_grid"]["configuration"]["chunk_shape"]))
+        cdata_shape = tuple(
+            math.ceil(s / c)
+            for s, c in zip(zarray_meta["shape"], zarray_meta["chunk_grid"]["configuration"]["chunk_shape"])
+        )
         self._chunk_block_map_asdf_key = ctx.generate_block_key()
         self._chunk_block_map = numpy.frombuffer(
             ctx.get_block_data_callback(chunk_block_map_index, self._chunk_block_map_asdf_key)(), dtype="int32"

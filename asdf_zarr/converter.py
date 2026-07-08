@@ -1,6 +1,3 @@
-import asyncio
-import json
-
 import asdf
 import zarr
 import zarr.buffer
