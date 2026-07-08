@@ -26,20 +26,20 @@ class TestASDFBlockStore(StoreTests):
     async def store(self, open_kwargs: dict[str, Any]) -> Store:
         store = await self.store_cls.open(**open_kwargs)
         # delete this default key to allow using most of the inherited tests
-        await store.delete(".zarray")
+        await store.delete("zarr.json")
         return store
 
     @pytest.fixture()
     def store_kwargs(self, tmp_path) -> dict[str, Any]:
         zarray = {
-            "zarr_format": 2,
+            "zarr_format": 3,
             "shape": (2, 3),
-            "chunks": (1, 1),
-            "dtype": "|u1",
-            "compressor": None,
+            "chunk_grid": {"name": "regular", "configuration": {"chunk_shape": (1, 1)}},
+            "data_type": "uint8",
             "fill_value": 1,
-            "order": "C",
-            "filters": None,
+            "node_type": "array",
+            "chunk_key_encoding": {"name": "default"},
+            "codecs": [{"name": "bytes"}],
         }
         chunk_map = np.full((2, 3), -1, dtype="int32").tobytes()
 
@@ -74,17 +74,24 @@ class TestASDFBlockStore(StoreTests):
         # check that 2 store with the same open args are equal
         assert store.__class__(**store_kwargs) == store.__class__(**store_kwargs)
 
+    def test_store_key_exists(self, open_kwargs: dict[str, Any]) -> None:
+        thisstore = await self.store_cls.open(**open_kwargs)
+        thisttore.delete("fill_value")
+        assert not thisstore.exists("fill_value")
+        assert thisstore.exists("shape")
+        assert thisstore.exists("zarr.json")
+
 
 async def test_asdf_block_store():
     zarray = {
-        "zarr_format": 2,
+        "zarr_format": 3,
         "shape": (2, 3),
-        "chunks": (1, 1),
-        "dtype": "|u1",
-        "compressor": None,
+        "chunk_grid": {"name": "regular", "configuration": {"chunk_shape": (1, 1)}},
+        "data_type": "uint8",
         "fill_value": 1,
-        "order": "C",
-        "filters": None,
+        "node_type": "array",
+        "chunk_key_encoding": {"name": "default"},
+        "codecs": [{"name": "bytes"}],
     }
     chunk_map = np.full((2, 3), -1, dtype="int32").tobytes()
 
@@ -99,6 +106,6 @@ async def test_asdf_block_store():
 
     ctx = FakeContext()
     store = ASDFBlockStore(ctx, 42, zarray)
-    z = zarr.open_array(store, zarr_format=2)
+    z = zarr.open_array(store, zarr_format=3)
     assert np.all(z[:] == 1)
     assert z.shape == (2, 3)

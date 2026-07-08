@@ -1,10 +1,8 @@
-import asyncio
 import itertools
 import json
 import math
 import tempfile
 
-import asdf
 import numpy
 import zarr
 
@@ -27,17 +25,20 @@ def _iter_chunk_keys(zarray, only_initialized=False):
     """Using zarray metadata iterate over chunk keys"""
     if only_initialized:
         for k in async_iter_to_list(zarray.store.list()):
-            if k in (".zarray", ".zattrs"):
+            if k in (".zarray", ".zattrs", "zarr.json"):
                 continue
             yield k
         return
     # load meta
     zarray_meta = zarray.metadata.to_dict()
-    dimension_separator = zarray_meta.get("dimension_separator", ".")
+    dimension_separator = zarray_meta.get("dimension_separator", "/")
 
     # make blocks and map them to the internal kv store
     # compute number of chunks (across all axes)
-    chunk_counts = [math.ceil(s / c) for (s, c) in zip(zarray_meta["shape"], zarray_meta["chunks"])]
+    chunk_counts = [
+        math.ceil(s / c)
+        for (s, c) in zip(zarray_meta["shape"], zarray_meta["chunk_grid"]["configuration"]["chunk_shape"])
+    ]
 
     # iterate over all chunk keys
     chunk_iter = itertools.product(*[range(c) for c in chunk_counts])
@@ -59,10 +60,14 @@ def _generate_chunk_map_callback(zarray, chunk_key_block_index_map):
         chunk_map = numpy.zeros(zarray.cdata_shape, dtype="int32")
         chunk_map[:] = MISSING_CHUNK  # set all as uninitialized
         zarray_meta = zarray.metadata.to_dict()
-        dimension_separator = zarray_meta.get("dimension_separator", ".")
+        dimension_separator = zarray_meta.get("dimension_separator", "/")
         for k in _iter_chunk_keys(zarray, only_initialized=True):
             index = chunk_key_block_index_map[k]
-            coords = tuple([int(sk) for sk in k.split(dimension_separator)])
+            # zarr format v3 uses 'c' and the separator as a prefix for coordinates so that needs to be stripped if there
+            coords = k.split(dimension_separator)
+            if coords[0].lower() == "c":
+                coords = coords[1:]
+            coords = tuple([int(sk) for sk in coords])
             chunk_map[coords] = index
         return chunk_map
 
@@ -164,7 +169,10 @@ class ASDFBlockStore(zarr.abc.store.Store):
         # so for a zarray with 4 x 5 chunks (dimension 1
         # split into 4 chunks) the chunk_block_map will be
         # 4 x 5
-        cdata_shape = tuple(math.ceil(s / c) for s, c in zip(zarray_meta["shape"], zarray_meta["chunks"]))
+        cdata_shape = tuple(
+            math.ceil(s / c)
+            for s, c in zip(zarray_meta["shape"], zarray_meta["chunk_grid"]["configuration"]["chunk_shape"])
+        )
         self._chunk_block_map_asdf_key = ctx.generate_block_key()
         self._chunk_block_map = numpy.frombuffer(
             ctx.get_block_data_callback(chunk_block_map_index, self._chunk_block_map_asdf_key)(), dtype="int32"
@@ -175,11 +183,11 @@ class ASDFBlockStore(zarr.abc.store.Store):
         # reorganize the map into a set and claim the block indices
         self._chunk_callbacks = {}
         self._chunk_asdf_keys = {}
-        _sep = zarray_meta.get("dimension_separator", ".")
+        _sep = zarray_meta.get("dimension_separator", "/")
         for coord in numpy.transpose(numpy.nonzero(self._chunk_block_map != MISSING_CHUNK)):
             coord = tuple(coord)
             block_index = int(self._chunk_block_map[coord])
-            chunk_key = _sep.join((str(c) for c in tuple(coord)))
+            chunk_key = "c/" + _sep.join((str(c) for c in tuple(coord)))
             asdf_key = ctx.generate_block_key()
             self._chunk_asdf_keys[chunk_key] = asdf_key
             self._chunk_callbacks[chunk_key] = ctx.get_block_data_callback(block_index, asdf_key)
@@ -230,7 +238,7 @@ class ASDFBlockStore(zarr.abc.store.Store):
         if await self._tmp_store.exists(key):
             return await self._tmp_store.get(key, prototype, byte_range)
 
-        if key == ".zarray":
+        if key == "zarr.json":
             return self._zarray_meta
 
         # then blocks
@@ -253,7 +261,7 @@ class ASDFBlockStore(zarr.abc.store.Store):
         if await self._tmp_store.exists(key):
             return True
 
-        if key == ".zarray":
+        if key == "zarr.json":
             return True
 
         # then blocks
@@ -272,8 +280,8 @@ class ASDFBlockStore(zarr.abc.store.Store):
             if key not in self._deleted_keys and key not in reported:
                 reported.add(key)
                 yield key
-        if ".zarray" not in reported and ".zarray" not in self._deleted_keys:
-            yield ".zarray"
+        if "zarr.json" not in reported and "zarr.json" not in self._deleted_keys:
+            yield "zarr.json"
         for key in self._chunk_callbacks:
             if key not in self._deleted_keys and key not in reported:
                 reported.add(key)

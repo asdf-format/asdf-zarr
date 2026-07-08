@@ -5,6 +5,7 @@
 - drop support for Python 3.9 [#57]
 - drop support for Python 3.10 [#58]
 - add support for zarr 3 [#58]
+- drop support for zarr < 3 [#61]
 
 0.0.4 (2024-06-28)
 ------------------
