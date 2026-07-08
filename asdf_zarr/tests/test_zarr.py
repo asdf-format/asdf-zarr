@@ -17,7 +17,11 @@ def create_zarray(shape=None, chunks=None, dtype="f8", store=None):
     if chunks is None:
         chunks = [max(1, d // 3) for d in shape]
     arr = zarr.create(
-        (6, 9), store=store, chunks=chunks, dtype=dtype, zarr_format=3,
+        (6, 9),
+        store=store,
+        chunks=chunks,
+        dtype=dtype,
+        zarr_format=3,
     )
     for chunk_index in itertools.product(*[range(c) for c in arr.cdata_shape]):
         inds = []
